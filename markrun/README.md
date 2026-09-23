@@ -39,9 +39,9 @@ bun run check
 
 ### Compiled executable
 
-`just install` installs the explicit runner as `mr`.
-The executable contains the Bun runtime and the TypeScript compiler.
-The command takes a document path and runs from any working directory.
+`just install` builds the explicit runner and copies the binary to `~/.local/bin/mr`.
+The binary includes the Bun runtime and the TypeScript compiler.
+It executes a document from any working directory.
 
 ```sh
 just install
