@@ -1,0 +1,406 @@
+TAP version 13
+# (node:939) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Bun native entry: bun run example.mr hello world
+ok 1 - Bun native entry: bun run example.mr hello world # SKIP Requires the real Bun runtime; not emulated under Node.
+  ---
+  duration_ms: 0.886219
+  type: 'test'
+  ...
+# Subtest: Bun native entry: no user arguments skip the Run section
+ok 2 - Bun native entry: no user arguments skip the Run section # SKIP Requires the real Bun runtime; not emulated under Node.
+  ---
+  duration_ms: 0.121049
+  type: 'test'
+  ...
+# Subtest: Bun native loader supports arbitrary .mr filenames, not just the example
+ok 3 - Bun native loader supports arbitrary .mr filenames, not just the example # SKIP Requires the real Bun runtime; not emulated under Node.
+  ---
+  duration_ms: 0.092347
+  type: 'test'
+  ...
+# Subtest: Bun explicit CLI and native entry agree on Bun.argv and rendering
+ok 4 - Bun explicit CLI and native entry agree on Bun.argv and rendering # SKIP Requires the real Bun runtime; not emulated under Node.
+  ---
+  duration_ms: 0.118204
+  type: 'test'
+  ...
+# (node:940) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: CLI help works without executing a file
+ok 5 - CLI help works without executing a file
+  ---
+  duration_ms: 497.174435
+  type: 'test'
+  ...
+# Subtest: CLI --list indexes every heading without running the entry
+ok 6 - CLI --list indexes every heading without running the entry
+  ---
+  duration_ms: 424.87789
+  type: 'test'
+  ...
+# Subtest: CLI --check validates the example without evaluating Bun-specific code
+ok 7 - CLI --check validates the example without evaluating Bun-specific code
+  ---
+  duration_ms: 441.951179
+  type: 'test'
+  ...
+# Subtest: CLI normalizes argv and passes user arguments
+ok 8 - CLI normalizes argv and passes user arguments
+  ---
+  duration_ms: 442.894377
+  type: 'test'
+  ...
+# Subtest: CLI returns nonzero and useful diagnostics on execution failure
+ok 9 - CLI returns nonzero and useful diagnostics on execution failure
+  ---
+  duration_ms: 445.814135
+  type: 'test'
+  ...
+# Subtest: CLI fails for a missing file
+ok 10 - CLI fails for a missing file
+  ---
+  duration_ms: 394.052107
+  type: 'test'
+  ...
+# (node:941) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: entry executes in order and stops at the first standalone stopper
+ok 11 - entry executes in order and stops at the first standalone stopper
+  ---
+  duration_ms: 36.135526
+  type: 'test'
+  ...
+# Subtest: without a stopper, fallthrough includes headings and all executable fences
+ok 12 - without a stopper, fallthrough includes headings and all executable fences
+  ---
+  duration_ms: 4.053187
+  type: 'test'
+  ...
+# Subtest: entry fences share lexical scope and TypeScript types are erased
+ok 13 - entry fences share lexical scope and TypeScript types are erased
+  ---
+  duration_ms: 9.253308
+  type: 'test'
+  ...
+# Subtest: fence boundaries prevent accidental ASI continuation
+ok 14 - fence boundaries prevent accidental ASI continuation
+  ---
+  duration_ms: 4.009233
+  type: 'test'
+  ...
+# Subtest: unused sections do not execute
+ok 15 - unused sections do not execute
+  ---
+  duration_ms: 2.517138
+  type: 'test'
+  ...
+# Subtest: an unreachable selector has no side effects and does not resolve
+ok 16 - an unreachable selector has no side effects and does not resolve
+  ---
+  duration_ms: 3.931467
+  type: 'test'
+  ...
+# Subtest: selecting runs code before rendering, and set interpolates afterward
+ok 17 - selecting runs code before rendering, and set interpolates afterward
+  ---
+  duration_ms: 4.254805
+  type: 'test'
+  ...
+# Subtest: printing the same Markdown twice runs its side effects only once
+ok 18 - printing the same Markdown twice runs its side effects only once
+  ---
+  duration_ms: 5.745958
+  type: 'test'
+  ...
+# Subtest: each new pull reruns code and owns independent variables
+ok 19 - each new pull reruns code and owns independent variables
+  ---
+  duration_ms: 4.323447
+  type: 'test'
+  ...
+# Subtest: initial values are available to section code before rendering
+ok 20 - initial values are available to section code before rendering
+  ---
+  duration_ms: 2.875948
+  type: 'test'
+  ...
+# Subtest: section code shares scope across its fences
+ok 21 - section code shares scope across its fences
+  ---
+  duration_ms: 2.812455
+  type: 'test'
+  ...
+# Subtest: entry and selected sections have separate lexical scope
+ok 22 - entry and selected sections have separate lexical scope
+  ---
+  duration_ms: 4.910043
+  type: 'test'
+  ...
+# Subtest: a parent includes descendant headings and code, but not its sibling
+ok 23 - a parent includes descendant headings and code, but not its sibling
+  ---
+  duration_ms: 1.913196
+  type: 'test'
+  ...
+# Subtest: a subheading can be pulled independently
+ok 24 - a subheading can be pulled independently
+  ---
+  duration_ms: 1.505143
+  type: 'test'
+  ...
+# Subtest: stopper also terminates a selected region, while later headings remain addressable
+ok 25 - stopper also terminates a selected region, while later headings remain addressable
+  ---
+  duration_ms: 2.245466
+  type: 'test'
+  ...
+# Subtest: full heading and colon alias resolve to the same region
+ok 26 - full heading and colon alias resolve to the same region
+  ---
+  duration_ms: 0.11467
+  type: 'test'
+  ...
+# Subtest: full titles take priority over aliases
+ok 27 - full titles take priority over aliases
+  ---
+  duration_ms: 0.086968
+  type: 'test'
+  ...
+# Subtest: ambiguous aliases fail; a unique full heading resolves
+ok 28 - ambiguous aliases fail; a unique full heading resolves
+  ---
+  duration_ms: 4.789769
+  type: 'test'
+  ...
+# Subtest: duplicate full headings fail instead of silently choosing the first
+ok 29 - duplicate full headings fail instead of silently choosing the first
+  ---
+  duration_ms: 0.190832
+  type: 'test'
+  ...
+# Subtest: heading depth is exact and a mismatch gets a useful suggestion
+ok 30 - heading depth is exact and a mismatch gets a useful suggestion
+  ---
+  duration_ms: 0.164533
+  type: 'test'
+  ...
+# Subtest: selectors are case-sensitive, not arbitrary prefix matches
+ok 31 - selectors are case-sensitive, not arbitrary prefix matches
+  ---
+  duration_ms: 0.214036
+  type: 'test'
+  ...
+# Subtest: invalid selectors are diagnosed
+ok 32 - invalid selectors are diagnosed
+  ---
+  duration_ms: 0.156181
+  type: 'test'
+  ...
+# Subtest: all six ATX heading levels, indentation and closing hashes are indexed
+ok 33 - all six ATX heading levels, indentation and closing hashes are indexed
+  ---
+  duration_ms: 1.755904
+  type: 'test'
+  ...
+# Subtest: headings and stoppers inside executable fences are not Markdown structure
+ok 34 - headings and stoppers inside executable fences are not Markdown structure
+  ---
+  duration_ms: 1.490852
+  type: 'test'
+  ...
+# Subtest: a longer closing fence is accepted, including the supplied four-backtick closer
+ok 35 - a longer closing fence is accepted, including the supplied four-backtick closer
+  ---
+  duration_ms: 1.106915
+  type: 'test'
+  ...
+# Subtest: shorter backticks inside a wider display fence do not close it
+ok 36 - shorter backticks inside a wider display fence do not close it
+  ---
+  duration_ms: 5.984219
+  type: 'test'
+  ...
+# Subtest: unclosed fences report their opening line
+ok 37 - unclosed fences report their opening line
+  ---
+  duration_ms: 0.180777
+  type: 'test'
+  ...
+# Subtest: BOM and CRLF input are normalized
+ok 38 - BOM and CRLF input are normalized
+  ---
+  duration_ms: 1.926435
+  type: 'test'
+  ...
+# Subtest: unlabelled and js fences execute; text, unknown languages and tilde fences stay literal
+ok 39 - unlabelled and js fences execute; text, unknown languages and tilde fences stay literal
+  ---
+  duration_ms: 1.422932
+  type: 'test'
+  ...
+# Subtest: full-line HTML comments suppress executable fences and headings
+ok 40 - full-line HTML comments suppress executable fences and headings
+  ---
+  duration_ms: 1.009652
+  type: 'test'
+  ...
+# Subtest: inline Markdown backticks remain prose
+ok 41 - inline Markdown backticks remain prose
+  ---
+  duration_ms: 0.750189
+  type: 'test'
+  ...
+# Subtest: AST rewriting ignores comments, strings, regexes and tagged templates
+ok 42 - AST rewriting ignores comments, strings, regexes and tagged templates
+  ---
+  duration_ms: 2.368579
+  type: 'test'
+  ...
+# Subtest: dynamic heading templates are selectors
+ok 43 - dynamic heading templates are selectors
+  ---
+  duration_ms: 2.07174
+  type: 'test'
+  ...
+# Subtest: a selector works in ordinary synchronous functions and callbacks
+ok 44 - a selector works in ordinary synchronous functions and callbacks
+  ---
+  duration_ms: 3.198765
+  type: 'test'
+  ...
+# Subtest: nested template expressions can contain selectors without regex corruption
+ok 45 - nested template expressions can contain selectors without regex corruption
+  ---
+  duration_ms: 1.63836
+  type: 'test'
+  ...
+# Subtest: interpolation is lazy, supports own-property paths, and preserves false and zero
+ok 46 - interpolation is lazy, supports own-property paths, and preserves false and zero
+  ---
+  duration_ms: 0.207546
+  type: 'test'
+  ...
+# Subtest: strict interpolation rejects missing variables at render time, not selection time
+ok 47 - strict interpolation rejects missing variables at render time, not selection time
+  ---
+  duration_ms: 0.817898
+  type: 'test'
+  ...
+# Subtest: interpolation is data, not executable source
+ok 48 - interpolation is data, not executable source
+  ---
+  duration_ms: 0.708136
+  type: 'test'
+  ...
+# Subtest: prototype access is not exposed by variable interpolation
+ok 49 - prototype access is not exposed by variable interpolation
+  ---
+  duration_ms: 0.179605
+  type: 'test'
+  ...
+# Subtest: String, JSON and inspection render Markdown without rerunning code
+ok 50 - String, JSON and inspection render Markdown without rerunning code
+  ---
+  duration_ms: 0.978325
+  type: 'test'
+  ...
+# Subtest: direct and indirect circular pulls fail with a call chain
+ok 51 - direct and indirect circular pulls fail with a call chain
+  ---
+  duration_ms: 2.023309
+  type: 'test'
+  ...
+# Subtest: failed pulls unwind the stack so future pulls can run
+ok 52 - failed pulls unwind the stack so future pulls can run
+  ---
+  duration_ms: 1.944131
+  type: 'test'
+  ...
+# Subtest: runtime errors identify the executing fence's source line
+ok 53 - runtime errors identify the executing fence's source line
+  ---
+  duration_ms: 1.214023
+  type: 'test'
+  ...
+# Subtest: parser diagnostics identify the original Markdown line
+ok 54 - parser diagnostics identify the original Markdown line
+  ---
+  duration_ms: 1.781101
+  type: 'test'
+  ...
+# Subtest: entry supports top-level await in sequential fence order
+ok 55 - entry supports top-level await in sequential fence order
+  ---
+  duration_ms: 2.487534
+  type: 'test'
+  ...
+# Subtest: implicit section pulls explicitly reject top-level await
+ok 56 - implicit section pulls explicitly reject top-level await
+  ---
+  duration_ms: 1.347931
+  type: 'test'
+  ...
+# Subtest: check compiles but never executes code
+ok 57 - check compiles but never executes code
+  ---
+  duration_ms: 1.988488
+  type: 'test'
+  ...
+# Subtest: unused invalid code is lazy, while check diagnoses it
+ok 58 - unused invalid code is lazy, while check diagnoses it
+  ---
+  duration_ms: 2.12555
+  type: 'test'
+  ...
+# Subtest: static imports execute locally and dynamic imports resolve from the .mr file
+ok 59 - static imports execute locally and dynamic imports resolve from the .mr file
+  ---
+  duration_ms: 39.176808
+  type: 'test'
+  ...
+# Subtest: static relative imports are resolved from the source document
+ok 60 - static relative imports are resolved from the source document
+  ---
+  duration_ms: 10.23663
+  type: 'test'
+  ...
+# Subtest: the internal context binding cannot collide with user identifiers
+ok 61 - the internal context binding cannot collide with user identifiers
+  ---
+  duration_ms: 3.211383
+  type: 'test'
+  ...
+# Subtest: markrun.args is a stable copy of caller-supplied user arguments
+ok 62 - markrun.args is a stable copy of caller-supplied user arguments
+  ---
+  duration_ms: 1.229086
+  type: 'test'
+  ...
+# Subtest: runFile reads and runs a real .mr file
+ok 63 - runFile reads and runs a real .mr file
+  ---
+  duration_ms: 6.964693
+  type: 'test'
+  ...
+# Subtest: the corrected user example works with and without arguments
+ok 64 - the corrected user example works with and without arguments
+  ---
+  duration_ms: 13.572328
+  type: 'test'
+  ...
+# Subtest: empty headings are rejected rather than becoming unaddressable sections
+ok 65 - empty headings are rejected rather than becoming unaddressable sections
+  ---
+  duration_ms: 0.283239
+  type: 'test'
+  ...
+1..65
+# tests 65
+# suites 0
+# pass 61
+# fail 0
+# cancelled 0
+# skipped 4
+# todo 0
+# duration_ms 2748.108157

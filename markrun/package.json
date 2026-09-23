@@ -1,0 +1,27 @@
+{
+  "name": "markrun",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Executable Markdown: pull a heading, run its code, render its text.",
+  "type": "module",
+  "bin": {
+    "markrun": "./src/cli.ts"
+  },
+  "exports": {
+    ".": "./src/index.ts",
+    "./register": "./src/register.js"
+  },
+  "scripts": {
+    "test": "bun test",
+    "test:node": "node --experimental-strip-types --test test/*.test.ts",
+    "check": "tsc --noEmit",
+    "markrun": "bun ./src/cli.ts"
+  },
+  "dependencies": {
+    "typescript": "5.8.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.0.4"
+  },
+  "license": "MIT"
+}
