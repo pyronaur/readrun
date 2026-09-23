@@ -7,9 +7,9 @@ import { Markrun, MarkrunError } from "./index.ts";
 const help = `Markrun 0.1 — executable Markdown
 
 Usage:
-  markrun file.mr [arguments...]           Execute from any directory
-  markrun --check file.mr                  Syntax-check without executing
-  markrun --list file.mr                   List addressable headings
+  mr file.mr [arguments...]                Execute from any directory
+  mr --check file.mr                       Syntax-check without executing
+  mr --list file.mr                        List addressable headings
 
 Only run .mr files you trust: executable fences have full runtime access.`;
 

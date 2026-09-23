@@ -5,7 +5,7 @@
   "description": "Executable Markdown: pull a heading, run its code, render its text.",
   "type": "module",
   "bin": {
-    "markrun": "./src/cli.ts"
+    "mr": "./src/cli.ts"
   },
   "exports": {
     ".": "./src/index.ts",
@@ -15,8 +15,8 @@
     "test": "bun test",
     "test:node": "node --experimental-strip-types --test test/*.test.ts",
     "check": "tsc --noEmit",
-    "build": "bun build ./src/cli.ts --compile --no-compile-autoload-bunfig --outfile ./dist/markrun",
-    "markrun": "bun ./src/cli.ts"
+    "build": "bun build ./src/cli.ts --compile --no-compile-autoload-bunfig --outfile ./dist/mr",
+    "mr": "bun ./src/cli.ts"
   },
   "dependencies": {
     "typescript": "5.8.3"
