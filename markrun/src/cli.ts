@@ -44,7 +44,12 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
 
 if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
   main().catch((error: unknown) => {
-    console.error(error instanceof MarkrunError ? `[${error.code}] ${error.message}` : error instanceof Error ? error.message : String(error));
+    if (error instanceof MarkrunError) {
+      console.error(`[${error.code}] ${error.message}`);
+      if (error.cause !== undefined) console.error(error.cause);
+    } else {
+      console.error(error);
+    }
     process.exitCode = 1;
   });
 }
