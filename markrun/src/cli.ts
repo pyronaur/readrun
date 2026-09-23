@@ -7,10 +7,9 @@ import { Markrun, MarkrunError } from "./index.ts";
 const help = `Markrun 0.1 — executable Markdown
 
 Usage:
-  bun run example.mr [arguments...]        With the included bunfig.toml
-  bun src/cli.ts file.mr [arguments...]     Explicit runner
-  bun src/cli.ts --check file.mr           Syntax-check without executing
-  bun src/cli.ts --list file.mr            List addressable headings
+  markrun file.mr [arguments...]           Execute from any directory
+  markrun --check file.mr                  Syntax-check without executing
+  markrun --list file.mr                   List addressable headings
 
 Only run .mr files you trust: executable fences have full runtime access.`;
 
