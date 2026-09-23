@@ -37,6 +37,17 @@ bun test
 bun run check
 ```
 
+### Compiled executable
+
+`just install` installs the explicit runner as `mr`.
+The executable contains the Bun runtime and the TypeScript compiler.
+The command takes a document path and runs from any working directory.
+
+```sh
+just install
+mr document.mr hello world
+```
+
 To add Markrun to another local project, copy `src/`, install the `typescript` dependency from `package.json`, and add the preload and loader settings to that project's `bunfig.toml`. Adjust the preload path when the files live elsewhere.
 
 ## A complete program
