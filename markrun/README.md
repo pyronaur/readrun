@@ -19,9 +19,9 @@ Run `mr README.md <chapter>` to read a chapter in your terminal:
 - `install`: build and install the `mr` command
 - `example`: a complete program
 - `rules`: the whole language on one table
-- `rendering`: what a section prints, and in what order
+- `output`: what a section prints, and in what order
 - `values`: how sections get their data (runs a live example)
-- `pulls`: rendering sections from code, and `await`
+- `render`: rendering sections from code, and `await`
 - `cli`: flags, stdin, stdout and exit codes
 - `hooks`: Markrun as a Claude Code hook
 - `structure`: section boundaries, scope, frontmatter and imports
@@ -116,16 +116,16 @@ A Markrun file is plain Markdown. These are the only things that mean something 
 | Everything before the first marker | The entry. `mr file.md` runs it. |
 | `<!--$: Name -->` on its own line, outside a fence | Starts a section named `Name`. It runs until the next marker. |
 | `$: md = 'Name'` / `$: md = 'Name', { values }` | Render the section now and declare `const md`, a string with its output. |
-| `{{ key }}` | Filled from the values passed at the pull. A missing value is an error. |
+| `{{ key }}` | Filled from the values passed where the section is rendered. A missing value is an error. |
 | Any other full-line `<!-- … -->` comment, and frontmatter | Notes. Never executed, never printed. |
 | `import { route } from 'markrun'` | `await route('Help', ['-h', '--help'])` prints a section and exits when a flag is passed. |
 
 Markers are HTML comments, so GitHub and other Markdown viewers hide them. Running code is opt-in: a plain ```` ```ts ```` block is an example that is shown, never run, so any Markdown file is safe to open with `mr`. GitHub highlights ```` ```ts run ```` by its first word and never shows the `run`.
 
-<!--$: rendering -->
-## Rendering
+<!--$: output -->
+## Output
 
-Rendering a section goes top to bottom: its text, then whatever its code prints, then more text, in file order. The entry prints as it goes. A pulled section collects the same output into the string that `$:` returns, and the caller decides where it goes.
+Rendering a section goes top to bottom: its text, then whatever its code prints, then more text, in file order. The entry prints as it goes. A section rendered with `$:` collects the same output into the string that `$:` returns, and the caller decides where it goes.
 
 ~~~ts
 <!--$: List -->
@@ -146,20 +146,20 @@ Done
 <!--$: values -->
 ## Values
 
-A section is a template, and its values come only from the pull that renders it:
+A section is a template, and its values come only from the `$:` that renders it:
 
 ```ts
 $: md = 'Greeting', { name: 'Ada' };   // {{ name }} is "Ada"
 $: line = 'Line', item;                // item's keys become the section's names
 ```
 
-Inside a section, passed values are `const` variables in its code and fill its placeholders. Nothing else does: a section's own variables never reach its text, and the entry gets no values at all. To trace a `{{ name }}`, find the pull.
+Inside a section, passed values are `const` variables in its code and fill its placeholders. Nothing else does: a section's own variables never reach its text, and the entry gets no values at all. To trace a `{{ name }}`, find where the section is rendered.
 
 - Values must be an object. Keys that aren't valid variable names (such as `first-name` or `arguments`) still fill placeholders but are not variables. A value may not reuse a name the section declares itself.
 - `{{ user.name }}` follows own properties only. `0` and `false` render as text, `null` renders as nothing, and `undefined` or a missing value is an error naming the section and the placeholder.
 - Placeholders inside inline code or fenced blocks are printed as written, the way Markdown treats code.
 - Values are not Markdown-escaped, and they are never executed.
-- Every pull runs the section again with fresh variables. Each section has its own scope, separate from its caller.
+- Every render runs the section again with fresh variables. Each section has its own scope, separate from its caller.
 
 A live example. On GitHub you see its code and the `Greeting` template below it; with `mr README.md values` you see the result:
 
@@ -176,12 +176,12 @@ console.log(greeting);
 console.log(`> (${name.length} letters in "${name}")`);
 ```
 
-<!--$: pulls -->
-## Pulls and await
+<!--$: render -->
+## Rendering from code, and await
 
-`$:` is an ordinary JavaScript label, so the file stays valid TypeScript. Only statements labeled `$` are pulls; strings, comments, templates and other labels are left alone. The name can be any expression, for example `$: md = name`.
+`$:` is an ordinary JavaScript label, so the file stays valid TypeScript. Only statements labeled `$` render sections; strings, comments, templates and other labels are left alone. The name can be any expression, for example `$: md = name`.
 
-Every region can `await`, including sections. A pull waits for the section, so the compiler adds the `await` itself. A pull must sit directly in a block (`if (x) $: md = 'Run'` needs braces), because it becomes a `const` declaration, and inside a function that function must be `async`.
+Every region can `await`, including sections. A render waits for the section, so the compiler adds the `await` itself. A `$:` statement must sit directly in a block (`if (x) $: md = 'Run'` needs braces), because it becomes a `const` declaration, and inside a function that function must be `async`.
 
 <!--$: cli -->
 ## Flags, stdin and stdout
@@ -243,7 +243,7 @@ Blocked `{{ command }}`. Ask the user to run it, or delete specific files instea
 - A section runs from its marker to the next marker, or to the end of the file. The marker line itself is not rendered. Headings, `---` and other Markdown inside a section are plain content. Sections do not nest.
 - All executable fences in one region share a lexical scope and run in document order. Fences must contain whole statements; a fence boundary ends a statement.
 - `console`, `require`, `module`, `exports`, `__filename` and `__dirname` are provided in every region, as in CommonJS.
-- Section names match exactly and case-sensitively, with whitespace normalized. Two markers with the same name are an error. An unknown name lists the available sections. Circular pulls show their chain, and nesting stops at a depth of 64.
+- Section names match exactly and case-sensitively, with whitespace normalized. Two markers with the same name are an error. An unknown name lists the available sections. Circular renders show their chain, and nesting stops at a depth of 64.
 - A `---` block starting on the first line is frontmatter: never executed, never printed.
 - Static imports load when their region runs. Dynamic imports resolve relative to the Markdown file. `import.meta.url`, `filename`, `dirname` and `resolve()` are supplied. `'markrun'` always refers to the running Markrun, like `'bun'` refers to Bun.
 - This is not a complete CommonMark parser. Only section markers, fenced blocks with up to three leading spaces, full-line HTML comments and frontmatter have structure. Executable fences inside lists, blockquotes or HTML blocks are not supported. Unclosed fences and markers without a name are errors.
@@ -270,7 +270,7 @@ const runtime = new Markrun(source, { filename: '/absolute/path/to/document.md',
 
 runtime.check();                                         // syntax only; no execution or type checking
 await runtime.run();                                     // run the entry, printing as it goes
-const text = await runtime.pull('Run', { arguments: 'hello' });
+const text = await runtime.render('Run', { arguments: 'hello' });
 
 await runFile('./example.md');                           // or read a file and run its entry
 ```
@@ -285,7 +285,7 @@ src/parser.ts       Markdown structure, section markers, frontmatter and name re
 src/compiler.ts     TypeScript AST rewriting and region compilation
 src/cache.ts        Compilation cache
 src/markdown.ts     Placeholder interpolation
-src/runtime.ts      Rendering, pulls, route() and cycle detection
+src/runtime.ts      Rendering, route() and cycle detection
 src/cli.ts          The mr command: run, --check and --list
 src/index.ts        Public API
 example.md          A complete example program

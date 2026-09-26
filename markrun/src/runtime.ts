@@ -31,7 +31,7 @@ export interface MarkrunModule {
 }
 
 /**
- * Where a render's text and printed output go, in file order. Inside a pulled section, printing is
+ * Where a render's text and printed output go, in file order. Inside a rendered section, printing is
  * collected instead of written. Blank lines around a block that printed nothing never double up.
  */
 function printer(target: ConsoleLike | Console, collect?: string[]) {
@@ -128,7 +128,7 @@ export class Markrun {
         const chunk = region.chunks[index];
         output.text(interpolate(chunk.text, values, region.name, filename, chunk.line));
       },
-      pull: (name, passed) => this.#pull(name, passed, chain),
+      render: (name, passed) => this.#render(name, passed, chain),
       importModule: (specifier, options) => specifier === "markrun" ? Promise.resolve(this.#module) : import(this.#resolveImport(specifier), options),
     };
     return { context, location };
@@ -153,7 +153,7 @@ export class Markrun {
   }
 
   /** Render a section: run its code top to bottom and collect its text and printed output in order. */
-  async #pull(name: unknown, passed: unknown, chain: Region[]): Promise<string> {
+  async #render(name: unknown, passed: unknown, chain: Region[]): Promise<string> {
     if (typeof name !== "string") throw new MarkrunError("SELECTOR", "A section name must be a string.", this.document.filename);
     const region = resolveSection(this.document, name);
     if (passed !== undefined && (passed === null || typeof passed !== "object" || Array.isArray(passed))) {
@@ -161,10 +161,10 @@ export class Markrun {
     }
     if (chain.includes(region)) {
       const path = [...chain, region].map(item => `${item.name} (line ${item.line})`).join(" -> ");
-      throw new MarkrunError("CYCLE", `Circular section pull: ${path}`, this.document.filename, region.line);
+      throw new MarkrunError("CYCLE", `Circular section render: ${path}`, this.document.filename, region.line);
     }
     if (chain.length >= (this.#options.maxDepth ?? 64)) {
-      throw new MarkrunError("DEPTH", "Maximum section-pull depth exceeded.", this.document.filename, region.line);
+      throw new MarkrunError("DEPTH", "Maximum section depth exceeded.", this.document.filename, region.line);
     }
     const values = { ...(passed as Record<string, unknown> | undefined) };
     const program = this.#program(region, this.#variables(region, values));
@@ -181,13 +181,13 @@ export class Markrun {
   async #route(name: string, flags: readonly string[]): Promise<void> {
     if (!Array.isArray(flags)) throw new MarkrunError("ROUTE", "route() needs a list of flags, as in route('Help', ['-h', '--help']).", this.document.filename);
     if (!hasFlag(this.args, flags)) return;
-    this.#console.log(await this.#pull(name, undefined, []));
+    this.#console.log(await this.#render(name, undefined, []));
     (this.#options.exit ?? (code => process.exit(code)))(0);
   }
 
   /** Render a section by name and return its text. */
-  pull(name: string, values?: Record<string, unknown>): Promise<string> {
-    return this.#pull(name, values, []);
+  render(name: string, values?: Record<string, unknown>): Promise<string> {
+    return this.#render(name, values, []);
   }
 
   /** Run the entry: its text and printed output go straight to the console, in order. */

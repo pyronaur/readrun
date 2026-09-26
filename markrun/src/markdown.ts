@@ -27,7 +27,7 @@ export function interpolate(text: string, values: Record<string, unknown>, secti
     const value = lookup(values, name);
     if (value === undefined) {
       const where = section === "<entry>" ? "The entry gets no values, so it cannot use" : `Section ${JSON.stringify(section)} needs a value for`;
-      throw new MarkrunError("VALUE", `${where} {{ ${name} }}. Pass it where the section is pulled.`, filename, line + text.slice(0, offset).split("\n").length - 1);
+      throw new MarkrunError("VALUE", `${where} {{ ${name} }}. Pass it where the section is rendered.`, filename, line + text.slice(0, offset).split("\n").length - 1);
     }
     return value === null ? "" : String(value);
   });

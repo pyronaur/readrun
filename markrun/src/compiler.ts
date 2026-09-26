@@ -15,7 +15,7 @@ export interface ExecutionContext {
   values: Record<string, unknown>;
   at(line: number): void;
   text(index: number): void;
-  pull(name: unknown, values?: unknown): Promise<string>;
+  render(name: unknown, values?: unknown): Promise<string>;
   importModule(specifier: string, options?: ImportCallOptions): Promise<unknown>;
 }
 
@@ -79,8 +79,8 @@ export function declaredNames(document: ParsedDocument, region: Region): Set<str
       if (bindings && ts.isNamespaceImport(bindings)) names.add(bindings.name.text);
       else if (bindings) for (const element of bindings.elements) names.add(element.name.text);
     } else if (ts.isLabeledStatement(statement) && statement.label.text === "$") {
-      const pull = pullParts(statement);
-      if (pull) names.add(pull.target.text);
+      const statementParts = renderParts(statement);
+      if (statementParts) names.add(statementParts.target.text);
     }
   }
   writeCache(key, [...names]);
@@ -88,7 +88,7 @@ export function declaredNames(document: ParsedDocument, region: Region): Set<str
 }
 
 /** `$: target = name` or `$: target = name, values`. */
-function pullParts(node: TS.LabeledStatement): { target: TS.Identifier; name: TS.Expression; values?: TS.Expression } | undefined {
+function renderParts(node: TS.LabeledStatement): { target: TS.Identifier; name: TS.Expression; values?: TS.Expression } | undefined {
   const ts = typescript();
   let expression = ts.isExpressionStatement(node.statement) ? node.statement.expression : undefined;
   let values: TS.Expression | undefined;
@@ -131,7 +131,7 @@ export function compileRegion(document: ParsedDocument, region: Region, globals:
   );
 }
 
-/** Rewrite `$:` pulls, imports and import.meta, then strip types. Only successful output is cached. */
+/** Rewrite `$:` renders, imports and import.meta, then strip types. Only successful output is cached. */
 function transpile(document: ParsedDocument, region: Region, internal: string, values: string[]): string {
   const ts = typescript();
   const input = regionSource(document, region, internal, values);
@@ -142,26 +142,26 @@ function transpile(document: ParsedDocument, region: Region, internal: string, v
 
     function visit(node: TS.Node): TS.VisitResult<TS.Node> {
       if (ts.isTypeNode(node)) return node;
-      // `$: md = 'Section', values` becomes `const md = await pull('Section', values)`.
+      // `$: md = 'Section', values` becomes `const md = await render('Section', values)`.
       if (ts.isLabeledStatement(node) && node.label.text === "$") {
         const line = node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1;
-        const pull = pullParts(node);
-        if (!pull) {
-          throw new MarkrunError("PULL", "A $: pull must assign a section to a name, as in $: md = 'Section' or $: md = 'Section', { values }.", document.filename, line);
+        const parts = renderParts(node);
+        if (!parts) {
+          throw new MarkrunError("RENDER", "A $: render must assign a section to a name, as in $: md = 'Section' or $: md = 'Section', { values }.", document.filename, line);
         }
         if (!ts.isBlock(node.parent) && !ts.isSourceFile(node.parent) && !ts.isCaseOrDefaultClause(node.parent)) {
-          throw new MarkrunError("PULL", "A $: pull declares a variable, so it needs its own block. Wrap it in { }.", document.filename, line);
+          throw new MarkrunError("RENDER", "A $: render declares a variable, so it needs its own block. Wrap it in { }.", document.filename, line);
         }
         let owner: TS.Node | undefined = node.parent;
         while (owner && !ts.isFunctionLike(owner)) owner = owner.parent;
         if (owner && !ts.canHaveModifiers(owner)) owner = undefined;
         if (owner && !ts.getModifiers(owner as TS.HasModifiers)?.some(modifier => modifier.kind === ts.SyntaxKind.AsyncKeyword)) {
-          throw new MarkrunError("PULL", "A $: pull waits for the section, so the function around it must be async.", document.filename, line);
+          throw new MarkrunError("RENDER", "A $: render waits for the section, so the function around it must be async.", document.filename, line);
         }
-        const args = [pull.name, ...(pull.values ? [pull.values] : [])].map(arg => ts.visitNode(arg, visit) as TS.Expression);
-        const call = factory.createAwaitExpression(factory.createCallExpression(member("pull"), undefined, args));
+        const args = [parts.name, ...(parts.values ? [parts.values] : [])].map(arg => ts.visitNode(arg, visit) as TS.Expression);
+        const call = factory.createAwaitExpression(factory.createCallExpression(member("render"), undefined, args));
         return factory.createVariableStatement(undefined, factory.createVariableDeclarationList(
-          [factory.createVariableDeclaration(pull.target.text, undefined, undefined, call)], ts.NodeFlags.Const,
+          [factory.createVariableDeclaration(parts.target.text, undefined, undefined, call)], ts.NodeFlags.Const,
         ));
       }
       if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
@@ -198,4 +198,4 @@ function transpile(document: ParsedDocument, region: Region, internal: string, v
 }
 
 /** Changes whenever the code generation changes, so a new Markrun never reuses old output. */
-const codegen = cacheKey("markrun-codegen", ...[regionSource, pullParts, declaredNames, compileRegion, transpile].map(String));
+const codegen = cacheKey("markrun-codegen", ...[regionSource, renderParts, declaredNames, compileRegion, transpile].map(String));

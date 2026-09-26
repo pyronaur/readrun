@@ -67,7 +67,7 @@ test("frontmatter can end with ..., and an unclosed --- on the first line is ord
 
 test("placeholders inside inline code and fenced blocks are printed as written", async () => {
   const runtime = new Markrun(doc(marker('A'), 'Hi {{ name }}, write `{{ name }}` or ``{{ x }}``.', '```text', '{{ y }}', '```', '~~~', '{{ z }}', '~~~'));
-  assert.equal(await runtime.pull('A', { name: 'Ada' }), 'Hi Ada, write `{{ name }}` or ``{{ x }}``.\n```text\n{{ y }}\n```\n~~~\n{{ z }}\n~~~');
+  assert.equal(await runtime.render('A', { name: 'Ada' }), 'Hi Ada, write `{{ name }}` or ``{{ x }}``.\n```text\n{{ y }}\n```\n~~~\n{{ z }}\n~~~');
 });
 
 test("without markers, --- and headings are ordinary text", async () => {
@@ -100,7 +100,7 @@ test("entry supports top-level await in sequential fence order", async () => {
   assert.deepEqual(output, [[3], [4]]);
 });
 
-// Pulling sections
+// Rendering sections
 
 test("unused sections do not execute", async () => {
   const { runtime, output } = capture(doc(fence('console.log("entry")'), marker('Hidden'), fence('throw new Error("must not execute")')));
@@ -108,7 +108,7 @@ test("unused sections do not execute", async () => {
   assert.deepEqual(output, [['entry']]);
 });
 
-test("a pull renders the section and returns its text as a string", async () => {
+test("$: renders the section and returns its text as a string", async () => {
   const { runtime, output } = capture(doc(fence('$: md = "A"; console.log(typeof md, md);'), marker('A'), 'Hello'));
   await runtime.run();
   assert.deepEqual(output, [['string', 'Hello']]);
@@ -122,7 +122,7 @@ test("passed values fill placeholders", async () => {
 
 test("passed values are variables in the section's code", async () => {
   const runtime = new Markrun(doc(marker('Math'), fence('console.log(input * 2)')));
-  assert.equal(await runtime.pull('Math', { input: 4 }), '8');
+  assert.equal(await runtime.render('Math', { input: 4 }), '8');
 });
 
 test("an object can be passed as is; its keys become the section's names", async () => {
@@ -133,48 +133,48 @@ test("an object can be passed as is; its keys become the section's names", async
 
 test("a missing value is an error that names the section and placeholder", async () => {
   const runtime = new Markrun(doc(marker('A'), 'Hi {{ name }}'), { filename: '/tmp/missing.md' });
-  await assert.rejects(() => runtime.pull('A'), (error: unknown) => error instanceof MarkrunError && error.code === 'VALUE' && error.line === 2 && /"A" needs a value for \{\{ name \}\}/.test(error.message));
+  await assert.rejects(() => runtime.render('A'), (error: unknown) => error instanceof MarkrunError && error.code === 'VALUE' && error.line === 2 && /"A" needs a value for \{\{ name \}\}/.test(error.message));
 });
 
 test("values must be an object", async () => {
   const runtime = new Markrun(marker('A'));
-  await assert.rejects(() => runtime.pull('A', 'text' as never), errorCode('VALUE', /must be an object/));
+  await assert.rejects(() => runtime.render('A', 'text' as never), errorCode('VALUE', /must be an object/));
 });
 
 test("a value may not reuse a name the section declares", async () => {
   const runtime = new Markrun(doc(marker('A'), fence('const title = "own";')));
-  await assert.rejects(() => runtime.pull('A', { title: 'passed' }), errorCode('VALUE', /same name/));
+  await assert.rejects(() => runtime.render('A', { title: 'passed' }), errorCode('VALUE', /same name/));
 });
 
 test("keys that are not variable names still fill placeholders", async () => {
   const runtime = new Markrun(doc(marker('A'), '{{ first-name }} {{ arguments }}'));
-  assert.equal(await runtime.pull('A', { 'first-name': 'Ada', arguments: 'x y' }), 'Ada x y');
+  assert.equal(await runtime.render('A', { 'first-name': 'Ada', arguments: 'x y' }), 'Ada x y');
 });
 
 test("placeholders follow own-property paths, and preserve false and zero", async () => {
   const runtime = new Markrun(doc(marker('A'), '{{ user.name }} {{ list.length }} {{ n }} {{ ok }} [{{ none }}]'));
-  assert.equal(await runtime.pull('A', { user: { name: 'Ada' }, list: [1, 2], n: 0, ok: false, none: null }), 'Ada 2 0 false []');
+  assert.equal(await runtime.render('A', { user: { name: 'Ada' }, list: [1, 2], n: 0, ok: false, none: null }), 'Ada 2 0 false []');
 });
 
 test("prototype properties are never reachable from placeholders", async () => {
   const runtime = new Markrun(doc(marker('A'), '{{ obj.inherited }}'));
-  await assert.rejects(() => runtime.pull('A', { obj: Object.create({ inherited: 'secret' }) }), errorCode('VALUE'));
+  await assert.rejects(() => runtime.render('A', { obj: Object.create({ inherited: 'secret' }) }), errorCode('VALUE'));
 });
 
 test("values are data, never executable source", async () => {
   const runtime = new Markrun(doc(marker('A'), '{{ value }}'));
   const value = '```ts\nthrow new Error("must not execute")\n```';
-  assert.equal(await runtime.pull('A', { value }), value);
+  assert.equal(await runtime.render('A', { value }), value);
 });
 
 test("section output is text and printed output, in file order", async () => {
   const runtime = new Markrun(doc(marker('A'), '# Top', fence('console.log("middle")'), 'Bottom'));
-  assert.equal(await runtime.pull('A'), '# Top\nmiddle\nBottom');
+  assert.equal(await runtime.render('A'), '# Top\nmiddle\nBottom');
 });
 
 test("a section's printing is captured, but console.error still goes to stderr", async () => {
   const { runtime, output, errors } = capture(doc(marker('A'), fence('console.log("in"); console.error("warn")')));
-  assert.equal(await runtime.pull('A'), 'in');
+  assert.equal(await runtime.render('A'), 'in');
   assert.deepEqual(output, []);
   assert.deepEqual(errors, [['warn']]);
 });
@@ -182,45 +182,45 @@ test("a section's printing is captured, but console.error still goes to stderr",
 test("sections can render their own children in place", async () => {
   const source = doc(marker('List'), '# {{ title }}', fence('for (const item of items) { $: line = "Line", { item }; console.log(line); }'), 'Done', marker('Line'), '- {{ item }}');
   const runtime = new Markrun(source);
-  assert.equal(await runtime.pull('List', { title: 'Items', items: ['a', 'b'] }), '# Items\n- a\n- b\nDone');
+  assert.equal(await runtime.render('List', { title: 'Items', items: ['a', 'b'] }), '# Items\n- a\n- b\nDone');
 });
 
-test("each pull runs the section again, with its own values", async () => {
+test("each render runs the section again, with its own values", async () => {
   const { runtime, output } = capture(doc(marker('Item'), '{{ value }}', fence('console.error("effect")')));
-  assert.equal(await runtime.pull('Item', { value: 'A' }), 'A');
-  assert.equal(await runtime.pull('Item', { value: 'B' }), 'B');
+  assert.equal(await runtime.render('Item', { value: 'A' }), 'A');
+  assert.equal(await runtime.render('Item', { value: 'B' }), 'B');
   assert.deepEqual(output, []);
 });
 
 test("sections can await", async () => {
   const runtime = new Markrun(doc(marker('A'), fence('const n = await Promise.resolve(2);\nconsole.log(n);')));
-  assert.equal(await runtime.pull('A'), '2');
+  assert.equal(await runtime.render('A'), '2');
 });
 
 test("section code shares scope across its fences", async () => {
   const runtime = new Markrun(doc(marker('Math'), fence('const base: number = 7;'), 'Middle', fence('console.log(base + 1)')));
-  assert.equal(await runtime.pull('Math'), 'Middle\n8');
+  assert.equal(await runtime.render('Math'), 'Middle\n8');
 });
 
-test("entry and pulled sections have separate lexical scope", async () => {
+test("entry and rendered sections have separate lexical scope", async () => {
   const { runtime, output } = capture(doc(fence('const local = "entry"; $: child = "Child"; console.log(child); console.log(local);'), marker('Child'), fence('const local = "child"; console.log(local)')));
   await runtime.run();
   assert.deepEqual(output, [['child'], ['entry']]);
 });
 
-test("an unreachable pull has no side effects and does not resolve", async () => {
+test("an unreachable render has no side effects and does not resolve", async () => {
   const { runtime, output } = capture(fence('if (false) { $: x = "Missing"; } console.log("ok");'));
   await runtime.run();
   assert.deepEqual(output, [['ok']]);
 });
 
-test("the pulled name can be any expression", async () => {
+test("the section name can be any expression", async () => {
   const { runtime, output } = capture(doc(fence('const name = "Hello"; $: a = name; $: b = `${name}`; console.log(a, b);'), marker('Hello'), 'world'));
   await runtime.run();
   assert.deepEqual(output, [['world', 'world']]);
 });
 
-test("a pull works in async functions and callbacks", async () => {
+test("$: works in async functions and callbacks", async () => {
   const { runtime, output } = capture(doc(fence('async function select() { $: md = "A"; return md; } console.log(await select()); await Promise.all([1].map(async () => { $: md = "A"; console.log(md); }));'), marker('A'), 'a'));
   await runtime.run();
   assert.deepEqual(output, [['a'], ['a']]);
@@ -229,11 +229,11 @@ test("a pull works in async functions and callbacks", async () => {
 test("$: must assign a plain name, inside a block, inside an async function", () => {
   for (const code of ['$: "A";', '$: a.b = "A";', '$: a += "A";', 'if (true) $: a = "A";', 'function f() { $: a = "A"; }', '$: a = "A", {}, {};']) {
     const runtime = new Markrun(doc(fence(code), marker('A')));
-    assert.throws(() => runtime.check(), errorCode('PULL'), code);
+    assert.throws(() => runtime.check(), errorCode('RENDER'), code);
   }
 });
 
-test("only $: statements pull; comments, strings, templates and other labels are left alone", async () => {
+test("only $: statements render; comments, strings, templates and other labels are left alone", async () => {
   const code = [
     '// $: a = "Missing"',
     'const text = "$: a = \'Missing\'";',
@@ -246,25 +246,25 @@ test("only $: statements pull; comments, strings, templates and other labels are
   assert.deepEqual(output, [['$: a = \'Missing\'', '$: a = "Missing"']]);
 });
 
-test("direct and indirect circular pulls fail with a call chain", async () => {
+test("direct and indirect circular renders fail with a call chain", async () => {
   const runtime = new Markrun(doc(marker('A'), fence('$: b = "B";'), marker('B'), fence('$: a = "A";')));
-  await assert.rejects(() => runtime.pull('A'), errorCode('CYCLE', /A .* -> B .* -> A/));
+  await assert.rejects(() => runtime.render('A'), errorCode('CYCLE', /A .* -> B .* -> A/));
 });
 
-test("the same section can be pulled concurrently", async () => {
+test("the same section can be rendered concurrently", async () => {
   const runtime = new Markrun(doc(marker('A'), fence('await Promise.resolve(); console.log(n);')));
-  assert.deepEqual(await Promise.all([runtime.pull('A', { n: 1 }), runtime.pull('A', { n: 2 })]), ['1', '2']);
+  assert.deepEqual(await Promise.all([runtime.render('A', { n: 1 }), runtime.render('A', { n: 2 })]), ['1', '2']);
 });
 
-test("failed pulls do not block later pulls", async () => {
+test("failed renders do not block later renders", async () => {
   const runtime = new Markrun(doc(marker('Broken'), fence('throw new Error("boom")'), marker('Fine'), 'ok'));
-  await assert.rejects(() => runtime.pull('Broken'), errorCode('EXECUTION'));
-  assert.equal(await runtime.pull('Fine'), 'ok');
+  await assert.rejects(() => runtime.render('Broken'), errorCode('EXECUTION'));
+  assert.equal(await runtime.render('Fine'), 'ok');
 });
 
 test("runtime errors identify the executing fence's source line", async () => {
   const runtime = new Markrun(doc(marker('Broken'), fence('const n = 1'), 'text', fence('throw new Error("boom")')), { filename: '/tmp/source.md' });
-  await assert.rejects(() => runtime.pull('Broken'), (error: unknown) => error instanceof MarkrunError && error.code === 'EXECUTION' && error.line === 7 && error.cause instanceof Error);
+  await assert.rejects(() => runtime.render('Broken'), (error: unknown) => error instanceof MarkrunError && error.code === 'EXECUTION' && error.line === 7 && error.cause instanceof Error);
 });
 
 test("parser diagnostics identify the original Markdown line", async () => {
@@ -300,8 +300,8 @@ test("route matches combined short flags and ignores arguments after --", async 
 
 test("section names resolve exactly and case-sensitively", async () => {
   const runtime = new Markrun(doc(marker('Always longer'), 'x'));
-  await assert.rejects(() => runtime.pull('Always'), errorCode('NOT_FOUND', /Available sections: "Always longer"/));
-  await assert.rejects(() => runtime.pull('always longer'), errorCode('NOT_FOUND'));
+  await assert.rejects(() => runtime.render('Always'), errorCode('NOT_FOUND', /Available sections: "Always longer"/));
+  await assert.rejects(() => runtime.render('always longer'), errorCode('NOT_FOUND'));
 });
 
 test("duplicate section names are rejected when the document is parsed", () => {
@@ -311,7 +311,7 @@ test("duplicate section names are rejected when the document is parsed", () => {
 test("markers tolerate spacing and indentation; names are whitespace-normalized", async () => {
   const runtime = new Markrun(doc('<!--$:Tight-->', 'a', '   <!--  $:  Spaced   out  -->', 'b'));
   assert.deepEqual(runtime.document.sections.map(section => section.name), ['Tight', 'Spaced out']);
-  assert.equal(await runtime.pull('Spaced out'), 'b');
+  assert.equal(await runtime.render('Spaced out'), 'b');
   assert.equal(resolveSection(parse(marker('A')), ' A ').name, 'A');
 });
 
@@ -348,7 +348,7 @@ test("BOM and CRLF input are normalized", async () => {
   const { runtime, output } = capture('﻿```ts run\r\nconsole.log(1)\r\n```\r\n<!--$: A -->\r\ntext');
   await runtime.run();
   assert.deepEqual(output, [[1]]);
-  assert.equal(await runtime.pull('A'), 'text');
+  assert.equal(await runtime.render('A'), 'text');
 });
 
 test("only fences marked run execute; everything else is shown", async () => {
@@ -380,7 +380,7 @@ test("static imports execute locally and dynamic imports resolve from the .md fi
     await writeFile(join(directory, 'helper.mjs'), 'export const answer = 42;');
     const { runtime, output } = capture(doc(fence('import { basename } from "node:path"; const { answer } = await import("./helper.mjs"); console.log(answer, basename(import.meta.filename));'), marker('Local'), fence('import { basename } from "node:path"; console.log(basename(__filename));')), { filename: join(directory, 'example.md') });
     await runtime.run();
-    assert.equal(await runtime.pull('Local'), 'example.md');
+    assert.equal(await runtime.render('Local'), 'example.md');
     assert.deepEqual(output, [[42, 'example.md']]);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
