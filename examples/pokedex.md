@@ -1,7 +1,7 @@
 <!-- Pokédex. Looks up Pokémon named on the command line, or piped in one per line. -->
 ```ts run
 import { parseArgs } from 'util';
-import { route } from 'markrun';
+import { route } from 'readrun';
 
 await route('Help', ['-h', '--help']);
 await route('Version', ['-v', '--version']);
@@ -55,7 +55,7 @@ if (flags.json) {
 ```
 
 <!--$: Help -->
-Usage: mr examples/pokedex.md [options] <pokemon...>
+Usage: rr examples/pokedex.md [options] <pokemon...>
 
 Looks up Pokémon by name or number. Names can also be piped in, one per line.
 

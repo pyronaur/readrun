@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "markrun",
+      "name": "readrun",
       "dependencies": {
         "typescript": "5.8.3",
       },

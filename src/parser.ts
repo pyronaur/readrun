@@ -1,4 +1,4 @@
-import { MarkrunError } from "./errors.ts";
+import { ReadrunError } from "./errors.ts";
 
 export interface Token {
   kind: "text" | "comment" | "frontmatter" | "marker" | "code";
@@ -59,7 +59,7 @@ export function parse(source: string, filename = "document.md"): ParsedDocument 
     const marker = inComment ? null : /^ {0,3}<!--\s*\$:(.*?)-->[ \t]*$/.exec(line);
     if (marker) {
       const name = normalizeName(marker[1]);
-      if (!name) throw new MarkrunError("MARKER", "Section markers need a name: <!--$: Name -->.", filename, i + 1);
+      if (!name) throw new ReadrunError("MARKER", "Section markers need a name: <!--$: Name -->.", filename, i + 1);
       tokens.push({ kind: "marker", raw: line, line: i + 1, endLine: i + 1, name });
       continue;
     }
@@ -75,13 +75,13 @@ export function parse(source: string, filename = "document.md"): ParsedDocument 
       const width = fence[1].length;
       const info = fence[2].trim();
       if (delimiter === "`" && info.includes("`")) {
-        throw new MarkrunError("FENCE", "A backtick fence's info string cannot contain backticks.", filename, i + 1);
+        throw new ReadrunError("FENCE", "A backtick fence's info string cannot contain backticks.", filename, i + 1);
       }
       const close = new RegExp(`^ {0,3}${delimiter === "`" ? "`" : "~"}{${width},}[ \\t]*$`);
       const body: string[] = [];
       while (++i < lines.length && !close.test(lines[i])) body.push(lines[i]);
       if (i >= lines.length) {
-        throw new MarkrunError("FENCE", `Unclosed ${delimiter.repeat(width)} fence.`, filename, start + 1);
+        throw new ReadrunError("FENCE", `Unclosed ${delimiter.repeat(width)} fence.`, filename, start + 1);
       }
       tokens.push({
         kind: "code", line: start + 1, endLine: i + 1,
@@ -104,7 +104,7 @@ export function parse(source: string, filename = "document.md"): ParsedDocument 
   for (const section of sections) {
     const previous = seen.get(section.name);
     if (previous) {
-      throw new MarkrunError("DUPLICATE", `Section ${JSON.stringify(section.name)} is already defined on line ${previous.line}.`, filename, section.line);
+      throw new ReadrunError("DUPLICATE", `Section ${JSON.stringify(section.name)} is already defined on line ${previous.line}.`, filename, section.line);
     }
     seen.set(section.name, section);
   }
@@ -143,10 +143,10 @@ function chunksOf(tokens: Token[]): Chunk[] {
 /** Names are exact and case-sensitive, with whitespace normalized. */
 export function resolveSection(document: ParsedDocument, name: string): Region {
   if (typeof name !== "string" || !normalizeName(name)) {
-    throw new MarkrunError("SELECTOR", "A section name must be a nonempty string.", document.filename);
+    throw new ReadrunError("SELECTOR", "A section name must be a nonempty string.", document.filename);
   }
   const section = document.sections.find(item => item.name === normalizeName(name));
   if (section) return section;
   const available = document.sections.map(item => JSON.stringify(item.name)).join(", ") || "(none)";
-  throw new MarkrunError("NOT_FOUND", `No section named ${JSON.stringify(name)}. Available sections: ${available}.`, document.filename);
+  throw new ReadrunError("NOT_FOUND", `No section named ${JSON.stringify(name)}. Available sections: ${available}.`, document.filename);
 }

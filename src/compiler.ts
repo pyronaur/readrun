@@ -1,7 +1,7 @@
 import { createRequire } from "node:module";
 import type TS from "typescript";
 import { cacheKey, readCache, writeCache } from "./cache.ts";
-import { MarkrunError } from "./errors.ts";
+import { ReadrunError } from "./errors.ts";
 import type { ParsedDocument, Region } from "./parser.ts";
 
 export interface ExecutionContext {
@@ -69,7 +69,7 @@ export function declaredNames(document: ParsedDocument, region: Region): Set<str
   if (Array.isArray(hit)) return new Set(hit);
   const ts = typescript();
   const names = new Set<string>();
-  const source = ts.createSourceFile("region.ts", regionSource(document, region, "__markrun_context", []), ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
+  const source = ts.createSourceFile("region.ts", regionSource(document, region, "__readrun_context", []), ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
   for (const statement of source.statements) {
     if (ts.isVariableStatement(statement)) for (const declaration of statement.declarationList.declarations) bindingNames(declaration.name, names);
     else if ((ts.isFunctionDeclaration(statement) || ts.isClassDeclaration(statement)) && statement.name) names.add(statement.name.text);
@@ -112,11 +112,11 @@ function renderLines(node: TS.LabeledStatement): RenderLine[] | undefined {
 
 /** Compile an entire region at once so bindings survive between its fences. Every region is async. */
 export function compileRegion(document: ParsedDocument, region: Region, globals: string[] = [], values: string[] = []): Program {
-  let internal = "__markrun_context";
+  let internal = "__readrun_context";
   while (document.source.includes(internal) || globals.includes(internal)) internal += "_";
   for (const name of globals) {
     if (!/^[A-Za-z_$][\w$]*$/.test(name) || parameters.includes(name)) {
-      throw new MarkrunError("BINDING", `Invalid or reserved injected global ${JSON.stringify(name)}.`, document.filename);
+      throw new ReadrunError("BINDING", `Invalid or reserved injected global ${JSON.stringify(name)}.`, document.filename);
     }
   }
   const key = cacheKey(codegen, "region", document.source, region.id, internal, globals.join(","), values.join(","));
@@ -131,7 +131,7 @@ export function compileRegion(document: ParsedDocument, region: Region, globals:
     const sourceURL = `${document.filename.replace(/[\r\n]/g, "")}.${region.id.replace(":", "-")}.js`;
     executable = new AsyncFunction(internal, ...parameters, ...globals, `${output}\n//# sourceURL=${sourceURL}`);
   } catch (cause) {
-    throw new MarkrunError("SYNTAX", `Cannot compile ${region.name}: ${cause instanceof Error ? cause.message : String(cause)}`, document.filename, region.line, cause);
+    throw new ReadrunError("SYNTAX", `Cannot compile ${region.name}: ${cause instanceof Error ? cause.message : String(cause)}`, document.filename, region.line, cause);
   }
 
   return context => executable(
@@ -162,8 +162,8 @@ function transpile(document: ParsedDocument, region: Region, internal: string, v
         if (!lines) {
           const statements = parallel ? [...(node.statement as TS.Block).statements] : [];
           const bad = statements.find(statement => !renderParts(statement));
-          if (parallel && !bad) throw new MarkrunError("RENDER", "A $: { } block needs at least one render inside.", document.filename, line);
-          throw new MarkrunError("RENDER", parallel
+          if (parallel && !bad) throw new ReadrunError("RENDER", "A $: { } block needs at least one render inside.", document.filename, line);
+          throw new ReadrunError("RENDER", parallel
             ? "Each line in a $: { } block must render a section, as in a = 'Section', { values };"
             : "A $: render must assign a section to a name, as in $: md = 'Section' or $: md = 'Section', { values }.", document.filename, bad ? lineOf(bad) : line);
         }
@@ -171,7 +171,7 @@ function transpile(document: ParsedDocument, region: Region, internal: string, v
         const targets = new Map(lines.map(item => [item.target.text, item]));
         if (targets.size < lines.length) {
           const repeated = lines.find((item, index) => lines.findIndex(other => other.target.text === item.target.text) !== index)!;
-          throw new MarkrunError("RENDER", `${repeated.target.text} is assigned twice in the same $: { } block.`, document.filename, lineOf(repeated.statement));
+          throw new ReadrunError("RENDER", `${repeated.target.text} is assigned twice in the same $: { } block.`, document.filename, lineOf(repeated.statement));
         }
         const uses = (expression: TS.Node): string | undefined => {
           if (ts.isIdentifier(expression) && targets.has(expression.text)
@@ -181,16 +181,16 @@ function transpile(document: ParsedDocument, region: Region, internal: string, v
         };
         if (parallel) for (const item of lines) {
           const used = [item.name, item.values].map(part => part && uses(part)).find(Boolean);
-          if (used) throw new MarkrunError("RENDER", `${item.target.text} can't use ${used}: lines in a $: { } block render at the same time. Move it after the block.`, document.filename, lineOf(item.statement));
+          if (used) throw new ReadrunError("RENDER", `${item.target.text} can't use ${used}: lines in a $: { } block render at the same time. Move it after the block.`, document.filename, lineOf(item.statement));
         }
         if (!ts.isBlock(node.parent) && !ts.isSourceFile(node.parent) && !ts.isCaseOrDefaultClause(node.parent)) {
-          throw new MarkrunError("RENDER", "A $: render declares a variable, so it needs its own block. Wrap it in { }.", document.filename, line);
+          throw new ReadrunError("RENDER", "A $: render declares a variable, so it needs its own block. Wrap it in { }.", document.filename, line);
         }
         let owner: TS.Node | undefined = node.parent;
         while (owner && !ts.isFunctionLike(owner)) owner = owner.parent;
         if (owner && !ts.canHaveModifiers(owner)) owner = undefined;
         if (owner && !ts.getModifiers(owner as TS.HasModifiers)?.some(modifier => modifier.kind === ts.SyntaxKind.AsyncKeyword)) {
-          throw new MarkrunError("RENDER", "A $: render waits for the section, so the function around it must be async.", document.filename, line);
+          throw new ReadrunError("RENDER", "A $: render waits for the section, so the function around it must be async.", document.filename, line);
         }
         const calls = lines.map(item => factory.createCallExpression(member("render"), undefined,
           [item.name, ...(item.values ? [item.values] : [])].map(arg => ts.visitNode(arg, visit) as TS.Expression)));
@@ -229,10 +229,10 @@ function transpile(document: ParsedDocument, region: Region, internal: string, v
   if (diagnostic) {
     const line = diagnostic.file && diagnostic.start !== undefined
       ? diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start).line + 1 : region.line;
-    throw new MarkrunError("SYNTAX", ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"), document.filename, line);
+    throw new ReadrunError("SYNTAX", ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"), document.filename, line);
   }
   return result.outputText;
 }
 
-/** Changes whenever the code generation changes, so a new Markrun never reuses old output. */
-const codegen = cacheKey("markrun-codegen", ...[regionSource, renderParts, renderLines, declaredNames, compileRegion, transpile].map(String));
+/** Changes whenever the code generation changes, so a new Readrun never reuses old output. */
+const codegen = cacheKey("readrun-codegen", ...[regionSource, renderParts, renderLines, declaredNames, compileRegion, transpile].map(String));

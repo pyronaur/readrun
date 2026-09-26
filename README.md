@@ -1,8 +1,8 @@
-# Markrun
+# Readrun
 
 **A Markdown file that runs as a command.**
 
-Markrun runs plain Markdown files whose ```` ```ts run ```` blocks are code. This README is one: read it here, or run it with `mr README.md`.
+Readrun runs plain Markdown files whose ```` ```ts run ```` blocks are code. This README is one: read it here, or run it with `rr README.md`.
 
 ```ts run
 // Everything before the first section marker is the entry: it runs when the file runs.
@@ -17,7 +17,7 @@ if (chapter) {
 A whole program, `greet.md`:
 
 ````markdown
-<!-- Greets someone. Usage: mr greet.md NAME -->
+<!-- Greets someone. Usage: rr greet.md NAME -->
 ```ts run
 $: greeting = 'Greeting', { name: Bun.argv[2] ?? 'world' };
 console.log(greeting);
@@ -27,47 +27,48 @@ console.log(greeting);
 # Hello, {{ name }}
 ````
 
-`mr greet.md Ada` prints `# Hello, Ada`. The comment is a note and never prints, the code renders the `Greeting` section with a value, and GitHub shows the whole file as ordinary Markdown.
+`rr greet.md Ada` prints `# Hello, Ada`. The comment is a note and never prints, the code renders the `Greeting` section with a value, and GitHub shows the whole file as ordinary Markdown.
 
-Run `mr README.md <chapter>` to read a chapter in your terminal:
+Run `rr README.md <chapter>` to read a chapter in your terminal:
 
-- `install`: install the `mr` command
+- `install`: install the `readrun` command, or `rr` for short
 - `examples`: the example files, from a first program to a Pokédex
 - `rules`: the whole language on one table
 - `output`: what a section prints, and in what order
 - `values`: how sections get their data (runs a live example)
 - `render`: rendering sections from code, `await`, and rendering in parallel
 - `cli`: flags, stdin, stdout and exit codes
-- `hooks`: Markrun as a Claude Code hook
+- `hooks`: Readrun as a Claude Code hook
 - `structure`: section boundaries, scope, frontmatter and imports
 - `cache`: the compilation cache
-- `embedding`: using Markrun from TypeScript
+- `embedding`: using Readrun from TypeScript
 - `about`: source layout, trust and references
 
 <!--$: install -->
 ## Install
 
-Download `mr` for macOS or Linux from the [latest release](https://github.com/pyronaur/markrun/releases/latest). It is one file that includes the Bun runtime and the TypeScript compiler, so nothing else is needed:
+The command is `readrun`, and `rr` is a shorter name for it. Download it for macOS or Linux from the [latest release](https://github.com/pyronaur/readrun/releases/latest). It is one file that includes the Bun runtime and the TypeScript compiler, so nothing else is needed:
 
 ```sh
 mkdir -p ~/.local/bin
-curl -fsSL https://github.com/pyronaur/markrun/releases/latest/download/mr-darwin-arm64.tar.gz | tar -xz -C ~/.local/bin
-mr --version
+curl -fsSL https://github.com/pyronaur/readrun/releases/latest/download/readrun-darwin-arm64.tar.gz | tar -xz -C ~/.local/bin
+ln -s readrun ~/.local/bin/rr     # optional: skip it if you use Mozilla's rr debugger
+rr --version
 ```
 
 Replace `darwin-arm64` with `darwin-x64`, `linux-x64` or `linux-arm64` to match your machine, and make sure `~/.local/bin` is on your `PATH`.
 
-With [Bun](https://bun.com) installed, `bun install -g github:pyronaur/markrun` installs `mr` too. It runs the TypeScript source with your Bun, so it starts a little slower than the release binary.
+With [Bun](https://bun.com) installed, `bun install -g github:pyronaur/readrun` installs `readrun` and `rr` too. It runs the TypeScript source with your Bun, so it starts a little slower than the release binary.
 
-From a clone of this repository, `bun install` and then `just install` build `./dist/mr` and copy it to `~/.local/bin/mr`. Without installing, `bun src/cli.ts README.md` does the same as `mr README.md`.
+From a clone of this repository, `bun install` and then `just install` build `./dist/readrun`, copy it to `~/.local/bin/readrun` and link `rr` to it. Without installing, `bun src/cli.ts README.md` does the same as `rr README.md`.
 
 ```sh
-mr file.md [arguments...]     # run the file
-mr --check file.md            # syntax-check every block without running anything
-mr --list file.md             # list section names
-mr --version                  # print the Markrun version
+rr file.md [arguments...]     # run the file
+rr --check file.md            # syntax-check every block without running anything
+rr --list file.md             # list section names
+rr --version                  # print the Readrun version
 bun test                      # run the tests
-bun run check                 # type-check Markrun itself
+bun run check                 # type-check Readrun itself
 ```
 
 <!--$: examples -->
@@ -115,13 +116,13 @@ console.log("I am printed as code, never executed");
 Because it's rendered with console.log in the first section
 ````
 
-`mr examples/basics.md hello world` prints `Run` because arguments were passed, then `Always` and `Last Section`. `Always` is an ordinary section name, not a reserved hook.
+`rr examples/basics.md hello world` prints `Run` because arguments were passed, then `Always` and `Last Section`. `Always` is an ordinary section name, not a reserved hook.
 
 The other examples each show one idea:
 
 | File | Shows |
 | --- | --- |
-| `examples/greeting.md` | Values filling a template and appearing as variables in its code: `mr examples/greeting.md Ada` |
+| `examples/greeting.md` | Values filling a template and appearing as variables in its code: `rr examples/greeting.md Ada` |
 | `examples/await.md` | A section that awaits, and a `$: { }` block rendering two sections at the same time |
 | `examples/hook.md` | A Claude Code hook that answers in JSON |
 | `examples/pokedex.md` | Everything together: flags, stdin, `--help` and `--version` routes, a section that fetches, sections rendering sections, JSON output, stderr and exit codes |
@@ -129,28 +130,28 @@ The other examples each show one idea:
 The Pokédex needs internet access to reach [PokeAPI](https://pokeapi.co):
 
 ```sh
-mr examples/pokedex.md pikachu bulbasaur
-echo eevee | mr examples/pokedex.md --json | jq '.[0].types'
-mr examples/pokedex.md --help
+rr examples/pokedex.md pikachu bulbasaur
+echo eevee | rr examples/pokedex.md --json | jq '.[0].types'
+rr examples/pokedex.md --help
 ```
 
 <!--$: rules -->
 ## Language rules
 
-A Markrun file is plain Markdown. These are the only things that mean something extra:
+A Readrun file is plain Markdown. These are the only things that mean something extra:
 
 | Construct | Meaning |
 | --- | --- |
 | A backtick fence labeled `ts run`, `typescript run`, `js run`, `javascript run`, or just `run` | Executable code. Every other fence is only shown. |
-| Everything before the first marker | The entry. `mr file.md` runs it. |
+| Everything before the first marker | The entry. `rr file.md` runs it. |
 | `<!--$: Name -->` on its own line, outside a fence | Starts a section named `Name`. It runs until the next marker. |
 | `$: md = 'Name'` / `$: md = 'Name', { values }` | Render the section now and declare `const md`, a string with its output. |
 | `$: { a = 'A'; b = 'B', { values }; }` | Render several sections at the same time, declaring `a` and `b`. |
 | `{{ key }}` | Filled from the values passed where the section is rendered. Without a value, it is printed as written. |
 | Any other full-line `<!-- … -->` comment, and frontmatter | Notes. Never executed, never printed. |
-| `import { route } from 'markrun'` | `await route('Help', ['-h', '--help'])` prints a section and exits when a flag is passed. |
+| `import { route } from 'readrun'` | `await route('Help', ['-h', '--help'])` prints a section and exits when a flag is passed. |
 
-Markers are HTML comments, so GitHub and other Markdown viewers hide them. Running code is opt-in: a plain ```` ```ts ```` block is an example that is shown, never run, so any Markdown file is safe to open with `mr`. GitHub highlights ```` ```ts run ```` by its first word and never shows the `run`.
+Markers are HTML comments, so GitHub and other Markdown viewers hide them. Running code is opt-in: a plain ```` ```ts ```` block is an example that is shown, never run, so any Markdown file is safe to open with `rr`. GitHub highlights ```` ```ts run ```` by its first word and never shows the `run`.
 
 <!--$: output -->
 ## Output
@@ -193,10 +194,10 @@ Inside a section, passed values are `const` variables in its code and fill its p
 
 Code computes, and sections write. A render returns text, so compute the data a caller needs (counts, records, decisions) in code and pass it to sections as values. Keep text meant for people in sections rather than assembling Markdown in code. When a section works something out itself, it renders a smaller section with what it found.
 
-A live example. On GitHub you see its code and the `Greeting` template below it; with `mr README.md values` you see the result:
+A live example. On GitHub you see its code and the `Greeting` template below it; with `rr README.md values` you see the result:
 
 ```ts run
-$: greeting = 'Greeting', { name: 'Ada', language: 'Markrun' };
+$: greeting = 'Greeting', { name: 'Ada', language: 'Readrun' };
 console.log(greeting);
 ```
 
@@ -232,11 +233,11 @@ console.log(a, b);   // both ready here
 <!--$: cli -->
 ## Flags, stdin and stdout
 
-Use Bun's APIs directly. `mr` makes `Bun.argv` look like a normal run, so `Bun.argv.slice(2)` holds the user's arguments.
+Use Bun's APIs directly. `rr` makes `Bun.argv` look like a normal run, so `Bun.argv.slice(2)` holds the user's arguments.
 
 ```ts
 import { parseArgs } from 'util';
-import { route } from 'markrun';
+import { route } from 'readrun';
 
 await route('Help', ['-h', '--help']);          // prints <!--$: Help --> and exits 0
 
@@ -259,7 +260,7 @@ const piped = positionals.length === 0 && !process.stdin.isTTY ? (await Bun.stdi
 <!--$: hooks -->
 ## Claude Code hooks
 
-Hooks read JSON on stdin and answer with exit codes, stdout and stderr, so a Markrun file works as a [Claude Code hook](https://code.claude.com/docs/en/hooks) as is. Sections make good message templates:
+Hooks read JSON on stdin and answer with exit codes, stdout and stderr, so a Readrun file works as a [Claude Code hook](https://code.claude.com/docs/en/hooks) as is. Sections make good message templates:
 
 ~~~ts
 <!-- PreToolUse hook: stop recursive deletes, and tell Claude why. -->
@@ -282,7 +283,7 @@ Blocked `{{ command }}`. Ask the user to run it, or delete specific files instea
 - For hooks that answer in JSON, keep the entry free of text and put notes in comments: stdout must be only the JSON object.
 - For SessionStart and UserPromptSubmit hooks, plain stdout becomes context for Claude, so the file's own text is the context.
 - A hook reads files next to itself through `__dirname`, for example `join(__dirname, 'protected.txt')`, since hooks run from the project's directory.
-- Point the hook at the full path of `mr`, for example `"$HOME/.local/bin/mr" "$CLAUDE_PROJECT_DIR/.claude/hooks/guard.md"`. Hooks may not see your shell's `PATH`.
+- Point the hook at the full path of `readrun`, for example `"$HOME/.local/bin/readrun" "$CLAUDE_PROJECT_DIR/.claude/hooks/guard.md"`. Hooks may not see your shell's `PATH`.
 
 <!--$: structure -->
 ## Structure
@@ -292,28 +293,28 @@ Blocked `{{ command }}`. Ask the user to run it, or delete specific files instea
 - `console`, `require`, `module`, `exports`, `__filename` and `__dirname` are provided in every region, as in CommonJS.
 - Section names match exactly and case-sensitively, with whitespace normalized. Two markers with the same name are an error. An unknown name lists the available sections. Circular renders show their chain, and nesting stops at a depth of 64.
 - A `---` block starting on the first line is frontmatter: never executed, never printed.
-- Static imports load when their region runs. Dynamic imports resolve relative to the Markdown file. `import.meta.url`, `filename`, `dirname` and `resolve()` are supplied. `'markrun'` always refers to the running Markrun, like `'bun'` refers to Bun.
+- Static imports load when their region runs. Dynamic imports resolve relative to the Markdown file. `import.meta.url`, `filename`, `dirname` and `resolve()` are supplied. `'readrun'` always refers to the running Readrun, like `'bun'` refers to Bun.
 - This is not a complete CommonMark parser. Only section markers, fenced blocks with up to three leading spaces, full-line HTML comments and frontmatter have structure. Executable fences inside lists, blockquotes or HTML blocks are not supported. Unclosed fences and markers without a name are errors.
 
 <!--$: cache -->
 ## Compilation cache
 
-Compiled code is cached in `~/.cache/markrun/` (or `$XDG_CACHE_HOME/markrun/`), so a repeat run doesn't load the TypeScript compiler. Only `mr` reads or writes that folder, and nothing is written next to your files. Entries are keyed by the file's contents, the section, the passed value names and Markrun's own code generation, so edits and upgrades always compile fresh. Only successful compiles are stored, and a damaged entry is compiled again. Deleting the folder is always safe.
+Compiled code is cached in `~/.cache/readrun/` (or `$XDG_CACHE_HOME/readrun/`), so a repeat run doesn't load the TypeScript compiler. Only `rr` reads or writes that folder, and nothing is written next to your files. Entries are keyed by the file's contents, the section, the passed value names and Readrun's own code generation, so edits and upgrades always compile fresh. Only successful compiles are stored, and a damaged entry is compiled again. Deleting the folder is always safe.
 
 ```sh
-MARKRUN_CACHE=0 mr file.md              # no cache: always compile, read and write nothing
-MARKRUN_CACHE_DIR=/tmp/mr mr file.md    # use a different folder
+READRUN_CACHE=0 rr file.md              # no cache: always compile, read and write nothing
+READRUN_CACHE_DIR=/tmp/rr rr file.md    # use a different folder
 ```
 
-The compiled `mr` is built with Bun's `--bytecode`, so it starts in about 15 ms. A cached run of a small file takes about 20 ms, compared with about 50 ms when it has to compile.
+The compiled `rr` is built with Bun's `--bytecode`, so it starts in about 15 ms. A cached run of a small file takes about 20 ms, compared with about 50 ms when it has to compile.
 
 <!--$: embedding -->
 ## Embedding
 
 ```ts
-import { Markrun, runFile } from './src/index.ts';
+import { Readrun, runFile } from './src/index.ts';
 
-const runtime = new Markrun(source, { filename: '/absolute/path/to/document.md', args: ['hello'] });
+const runtime = new Readrun(source, { filename: '/absolute/path/to/document.md', args: ['hello'] });
 
 runtime.check();                                         // syntax only; no execution or type checking
 await runtime.run();                                     // run the entry, printing as it goes
@@ -333,12 +334,12 @@ src/compiler.ts     TypeScript AST rewriting and region compilation
 src/cache.ts        Compilation cache
 src/template.ts     Placeholder interpolation
 src/runtime.ts      Rendering, route() and cycle detection
-src/cli.ts          The mr command: run, --check and --list
+src/cli.ts          The readrun command: run, --check and --list
 src/index.ts        Public API
 examples/           Example programs, from basics.md to pokedex.md
 test/               Core, CLI and example tests
 ```
 
-**Only run Markdown files you trust.** Executable fences run with the same filesystem, network, process and environment access as `mr` itself. This is a language runtime, not a sandbox, and `mr README.md` runs this file's code too. Value substitution never becomes executable source, but that does not make an untrusted document safe to run.
+**Only run Markdown files you trust.** Executable fences run with the same filesystem, network, process and environment access as `rr` itself. This is a language runtime, not a sandbox, and `rr README.md` runs this file's code too. Value substitution never becomes executable source, but that does not make an untrusted document safe to run.
 
 `bun test` runs the core, CLI and example tests; `npm run test:node` runs the same suite under Node, skipping the tests that need Bun. Syntax rewriting uses the [TypeScript compiler API](https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API); flags and stdin follow Bun's [argument](https://bun.com/guides/process/argv) and [stdin](https://bun.com/guides/process/stdin) guides.

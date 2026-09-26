@@ -1,5 +1,5 @@
 {
-  "name": "markrun",
+  "name": "readrun",
   "version": "0.1.0",
   "private": true,
   "description": "Run Markdown files as commands: TypeScript blocks are code, sections are templates.",
@@ -14,15 +14,16 @@
     "hooks"
   ],
   "author": "pyronaur",
-  "homepage": "https://github.com/pyronaur/markrun#readme",
+  "homepage": "https://github.com/pyronaur/readrun#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/pyronaur/markrun.git"
+    "url": "git+https://github.com/pyronaur/readrun.git"
   },
-  "bugs": "https://github.com/pyronaur/markrun/issues",
+  "bugs": "https://github.com/pyronaur/readrun/issues",
   "type": "module",
   "bin": {
-    "mr": "./src/cli.ts"
+    "readrun": "./src/cli.ts",
+    "rr": "./src/cli.ts"
   },
   "exports": {
     ".": "./src/index.ts"
@@ -31,8 +32,8 @@
     "test": "bun test",
     "test:node": "node --experimental-strip-types --test test/*.test.ts",
     "check": "tsc --noEmit",
-    "build": "bun build ./src/cli.ts --compile --bytecode --no-compile-autoload-bunfig --outfile ./dist/mr",
-    "mr": "bun ./src/cli.ts"
+    "build": "bun build ./src/cli.ts --compile --bytecode --no-compile-autoload-bunfig --outfile ./dist/readrun",
+    "readrun": "bun ./src/cli.ts"
   },
   "dependencies": {
     "typescript": "5.8.3"

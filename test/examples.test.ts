@@ -5,8 +5,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdtempSync } from "node:fs";
 
-// Never touch the real ~/.cache/markrun from tests.
-process.env.MARKRUN_CACHE_DIR = mkdtempSync(join(tmpdir(), "markrun-cache-"));
+// Never touch the real ~/.cache/readrun from tests.
+process.env.READRUN_CACHE_DIR = mkdtempSync(join(tmpdir(), "readrun-cache-"));
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const isBun = Boolean((globalThis as typeof globalThis & { Bun?: unknown }).Bun);
@@ -59,7 +59,7 @@ test('pokedex.md: an unknown Pokémon goes to stderr with exit 1', options, () =
 test('pokedex.md: no names prints help to stderr with exit 2; -h and --version exit 0', options, async () => {
   const empty = await pokedex([]);
   assert.equal(empty.status, 2);
-  assert.match(empty.stderr, /^Usage: mr examples\/pokedex\.md/);
+  assert.match(empty.stderr, /^Usage: rr examples\/pokedex\.md/);
   const help = await pokedex(['-h']);
   assert.equal(help.status, 0);
   assert.match(help.stdout, /^Usage: .*\n\nLooks up Pokémon/);

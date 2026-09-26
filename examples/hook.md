@@ -1,6 +1,6 @@
 <!-- A Claude Code PreToolUse hook: stop recursive deletes, and tell Claude why.
      In .claude/settings.json: { "matcher": "Bash", "hooks": [{ "type": "command",
-     "command": "\"$HOME/.local/bin/mr\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/hook.md\"" }] } -->
+     "command": "\"$HOME/.local/bin/readrun\" \"$CLAUDE_PROJECT_DIR/.claude/hooks/hook.md\"" }] } -->
 ```ts run
 const input = await Bun.stdin.json();
 const command = input.tool_input?.command ?? '';

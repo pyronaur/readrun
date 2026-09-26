@@ -3,4 +3,5 @@ build:
 
 install: build
     mkdir -p "$HOME/.local/bin"
-    install -m 755 dist/mr "$HOME/.local/bin/mr"
+    install -m 755 dist/readrun "$HOME/.local/bin/readrun"
+    ln -sf readrun "$HOME/.local/bin/rr"

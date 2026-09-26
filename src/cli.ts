@@ -2,20 +2,22 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Markrun, MarkrunError } from "./index.ts";
+import { Readrun, ReadrunError } from "./index.ts";
 import manifest from "../package.json" with { type: "json" };
 
-const help = `Markrun: run Markdown files as commands
+const help = `Readrun: run Markdown files as commands
 
 Usage:
-  mr file.md [arguments...]                Execute from any directory
-  mr --check file.md                       Syntax-check without executing
-  mr --list file.md                        List section names
-  mr --version                             Print the Markrun version
+  readrun file.md [arguments...]           Execute from any directory
+  readrun --check file.md                  Syntax-check without executing
+  readrun --list file.md                   List section names
+  readrun --version                        Print the Readrun version
+
+rr is a shorter name for the same command.
 
 Only run Markdown files you trust: executable fences have full runtime access.`;
 
-/** A mistake in how mr itself was called: shown with the usage text, exit code 2. */
+/** A mistake in how readrun itself was called: shown with the usage text, exit code 2. */
 class UsageError extends Error {}
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {
@@ -24,7 +26,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     return;
   }
   if (argv[0] === "--version" || argv[0] === "-v") {
-    console.log(`markrun ${manifest.version}`);
+    console.log(`readrun ${manifest.version}`);
     return;
   }
   const mode = argv[0] === "--check" || argv[0] === "--list" ? argv[0] : "run";
@@ -38,9 +40,9 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
     source = await readFile(filename, "utf8");
   } catch (cause) {
     const reason = (cause as NodeJS.ErrnoException).code ?? (cause instanceof Error ? cause.message : String(cause));
-    throw new MarkrunError("FILE", `Cannot read ${file} (${reason}).`, filename, 1);
+    throw new ReadrunError("FILE", `Cannot read ${file} (${reason}).`, filename, 1);
   }
-  const document = new Markrun(source, { filename, args });
+  const document = new Readrun(source, { filename, args });
   if (mode === "--check") {
     document.check();
     console.log(`OK: ${file} (${document.document.sections.length} sections)`);
@@ -64,11 +66,11 @@ const isMain = (import.meta as { main?: boolean }).main ?? (!!process.argv[1] &&
 if (isMain) {
   main().catch((error: unknown) => {
     if (error instanceof UsageError) {
-      console.error(`mr: ${error.message}\n\n${help}`);
+      console.error(`readrun: ${error.message}\n\n${help}`);
       process.exitCode = 2;
       return;
     }
-    if (error instanceof MarkrunError) {
+    if (error instanceof ReadrunError) {
       console.error(`[${error.code}] ${error.code === "FILE" ? error.message.replace(/^.*?:1: /, "") : error.message}`);
       if (error.cause !== undefined) console.error(error.cause);
     } else {

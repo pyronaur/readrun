@@ -5,7 +5,7 @@ import { pathToFileURL } from "node:url";
 import { format } from "node:util";
 import { compileRegion, declaredNames, isVariableName, parameters } from "./compiler.ts";
 import type { ExecutionContext, Program } from "./compiler.ts";
-import { MarkrunError } from "./errors.ts";
+import { ReadrunError } from "./errors.ts";
 import { interpolate } from "./template.ts";
 import { parse, resolveSection } from "./parser.ts";
 import type { ParsedDocument, Region } from "./parser.ts";
@@ -15,7 +15,7 @@ export interface ConsoleLike {
   [key: string]: unknown;
 }
 
-export interface MarkrunOptions {
+export interface ReadrunOptions {
   filename?: string;
   args?: readonly string[];
   console?: ConsoleLike | Console;
@@ -25,8 +25,8 @@ export interface MarkrunOptions {
   exit?: (code: number) => void;
 }
 
-/** What `import { ... } from 'markrun'` gives a .md file. */
-export interface MarkrunModule {
+/** What `import { ... } from 'readrun'` gives a .md file. */
+export interface ReadrunModule {
   route(name: string, flags: readonly string[]): Promise<void>;
 }
 
@@ -66,18 +66,18 @@ function hasFlag(args: readonly string[], flags: readonly string[]): boolean {
   return false;
 }
 
-export class Markrun {
+export class Readrun {
   readonly document: ParsedDocument;
   readonly args: readonly string[];
-  readonly #options: MarkrunOptions;
+  readonly #options: ReadrunOptions;
   readonly #programs = new Map<string, Program>();
   readonly #declared = new Map<string, Set<string>>();
   readonly #require: NodeJS.Require;
   readonly #console: ConsoleLike | Console;
-  readonly #module: MarkrunModule;
+  readonly #module: ReadrunModule;
   #running = false;
 
-  constructor(source: string, options: MarkrunOptions = {}) {
+  constructor(source: string, options: ReadrunOptions = {}) {
     this.#options = { ...options, globals: { ...options.globals } };
     this.document = parse(source, resolve(options.filename ?? "document.md"));
     this.args = Object.freeze([...(options.args ?? process.argv.slice(2))]);
@@ -85,7 +85,7 @@ export class Markrun {
     this.#console = options.console ?? console;
     this.#module = { route: (name, flags) => this.#route(name, flags) };
     if (options.maxDepth !== undefined && (!Number.isInteger(options.maxDepth) || options.maxDepth < 1)) {
-      throw new MarkrunError("DEPTH", "maxDepth must be a positive integer.", this.document.filename);
+      throw new ReadrunError("DEPTH", "maxDepth must be a positive integer.", this.document.filename);
     }
   }
 
@@ -109,7 +109,7 @@ export class Markrun {
 
   #requireFor(): NodeJS.Require {
     const base = this.#require;
-    return Object.assign((id: string) => id === "markrun" ? this.#module : base(id), {
+    return Object.assign((id: string) => id === "readrun" ? this.#module : base(id), {
       resolve: base.resolve, cache: base.cache, extensions: base.extensions, main: base.main,
     }) as NodeJS.Require;
   }
@@ -131,15 +131,15 @@ export class Markrun {
       render: (name, passed) => this.#render(name, passed, chain),
       // Not the region's own Promise, which the file could shadow.
       all: renders => Promise.all(renders),
-      importModule: (specifier, options) => specifier === "markrun" ? Promise.resolve(this.#module) : import(this.#resolveImport(specifier), options),
+      importModule: (specifier, options) => specifier === "readrun" ? Promise.resolve(this.#module) : import(this.#resolveImport(specifier), options),
     };
     return { context, location };
   }
 
-  #executionError(cause: unknown, region: Region, line: number): MarkrunError {
-    if (cause instanceof MarkrunError) return cause;
+  #executionError(cause: unknown, region: Region, line: number): ReadrunError {
+    if (cause instanceof ReadrunError) return cause;
     const where = region.id === "entry" ? "the entry" : `section ${JSON.stringify(region.name)}`;
-    return new MarkrunError("EXECUTION", `While running ${where}: ${cause instanceof Error ? cause.message : String(cause)}`, this.document.filename, line, cause);
+    return new ReadrunError("EXECUTION", `While running ${where}: ${cause instanceof Error ? cause.message : String(cause)}`, this.document.filename, line, cause);
   }
 
   #variables(region: Region, values: Record<string, unknown>): string[] {
@@ -148,7 +148,7 @@ export class Markrun {
     const names = Object.keys(values).filter(isVariableName).sort();
     for (const name of names) {
       if (declared.has(name) || parameters.includes(name) || Object.hasOwn(this.#options.globals ?? {}, name)) {
-        throw new MarkrunError("VALUE", `The value ${JSON.stringify(name)} passed to section ${JSON.stringify(region.name)} has the same name as a variable the section already has. Rename one of them.`, this.document.filename, region.line);
+        throw new ReadrunError("VALUE", `The value ${JSON.stringify(name)} passed to section ${JSON.stringify(region.name)} has the same name as a variable the section already has. Rename one of them.`, this.document.filename, region.line);
       }
     }
     return names;
@@ -156,17 +156,17 @@ export class Markrun {
 
   /** Render a section: run its code top to bottom and collect its text and printed output in order. */
   async #render(name: unknown, passed: unknown, chain: Region[]): Promise<string> {
-    if (typeof name !== "string") throw new MarkrunError("SELECTOR", "A section name must be a string.", this.document.filename);
+    if (typeof name !== "string") throw new ReadrunError("SELECTOR", "A section name must be a string.", this.document.filename);
     const region = resolveSection(this.document, name);
     if (passed !== undefined && (passed === null || typeof passed !== "object" || Array.isArray(passed))) {
-      throw new MarkrunError("VALUE", `Values for section ${JSON.stringify(region.name)} must be an object, as in $: md = '${region.name}', { title }.`, this.document.filename, region.line);
+      throw new ReadrunError("VALUE", `Values for section ${JSON.stringify(region.name)} must be an object, as in $: md = '${region.name}', { title }.`, this.document.filename, region.line);
     }
     if (chain.includes(region)) {
       const path = [...chain, region].map(item => `${item.name} (line ${item.line})`).join(" -> ");
-      throw new MarkrunError("CYCLE", `Circular section render: ${path}`, this.document.filename, region.line);
+      throw new ReadrunError("CYCLE", `Circular section render: ${path}`, this.document.filename, region.line);
     }
     if (chain.length >= (this.#options.maxDepth ?? 64)) {
-      throw new MarkrunError("DEPTH", "Maximum section depth exceeded.", this.document.filename, region.line);
+      throw new ReadrunError("DEPTH", "Maximum section depth exceeded.", this.document.filename, region.line);
     }
     const values = { ...(passed as Record<string, unknown> | undefined) };
     const program = this.#program(region, this.#variables(region, values));
@@ -181,7 +181,7 @@ export class Markrun {
   }
 
   async #route(name: string, flags: readonly string[]): Promise<void> {
-    if (!Array.isArray(flags)) throw new MarkrunError("ROUTE", "route() needs a list of flags, as in route('Help', ['-h', '--help']).", this.document.filename);
+    if (!Array.isArray(flags)) throw new ReadrunError("ROUTE", "route() needs a list of flags, as in route('Help', ['-h', '--help']).", this.document.filename);
     if (!hasFlag(this.args, flags)) return;
     this.#console.log(await this.#render(name, undefined, []));
     (this.#options.exit ?? (code => process.exit(code)))(0);
@@ -194,7 +194,7 @@ export class Markrun {
 
   /** Run the entry: its text and printed output go straight to the console, in order. */
   async run(): Promise<void> {
-    if (this.#running) throw new MarkrunError("REENTRY", "This document's entry program is already running.", this.document.filename);
+    if (this.#running) throw new ReadrunError("REENTRY", "This document's entry program is already running.", this.document.filename);
     this.#running = true;
     const region = this.document.entry;
     try {
@@ -217,9 +217,9 @@ export class Markrun {
   }
 }
 
-export async function runFile(filename: string, options: Omit<MarkrunOptions, "filename"> = {}): Promise<Markrun> {
+export async function runFile(filename: string, options: Omit<ReadrunOptions, "filename"> = {}): Promise<Readrun> {
   const absolute = resolve(filename);
-  const document = new Markrun(await readFile(absolute, "utf8"), { ...options, filename: absolute });
+  const document = new Readrun(await readFile(absolute, "utf8"), { ...options, filename: absolute });
   await document.run();
   return document;
 }

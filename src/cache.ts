@@ -3,10 +3,10 @@ import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-/** Markrun's own folder. MARKRUN_CACHE=0 turns caching off; MARKRUN_CACHE_DIR moves it. */
+/** Readrun's own folder. READRUN_CACHE=0 turns caching off; READRUN_CACHE_DIR moves it. */
 function cacheDir(): string | undefined {
-  if (process.env.MARKRUN_CACHE === "0") return undefined;
-  return process.env.MARKRUN_CACHE_DIR || join(process.env.XDG_CACHE_HOME || join(homedir(), ".cache"), "markrun");
+  if (process.env.READRUN_CACHE === "0") return undefined;
+  return process.env.READRUN_CACHE_DIR || join(process.env.XDG_CACHE_HOME || join(homedir(), ".cache"), "readrun");
 }
 
 export const cacheKey = (...parts: string[]): string => createHash("sha256").update(parts.join("\0")).digest("hex");

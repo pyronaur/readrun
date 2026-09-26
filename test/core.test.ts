@@ -6,22 +6,22 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdtempSync } from "node:fs";
 
-// Never touch the real ~/.cache/markrun from tests.
-process.env.MARKRUN_CACHE_DIR = mkdtempSync(join(tmpdir(), "markrun-cache-"));
-import { Markrun, MarkrunError, parse, resolveSection, runFile } from "../src/index.ts";
-import type { MarkrunOptions } from "../src/index.ts";
+// Never touch the real ~/.cache/readrun from tests.
+process.env.READRUN_CACHE_DIR = mkdtempSync(join(tmpdir(), "readrun-cache-"));
+import { Readrun, ReadrunError, parse, resolveSection, runFile } from "../src/index.ts";
+import type { ReadrunOptions } from "../src/index.ts";
 
 const fence = (code: string, language = "ts run", close = "```") => `\`\`\`${language}\n${code}\n${close}`;
 const doc = (...parts: string[]) => parts.join("\n");
 const marker = (name: string) => `<!--$: ${name} -->`;
-function capture(source: string, options: MarkrunOptions = {}) {
+function capture(source: string, options: ReadrunOptions = {}) {
   const output: unknown[][] = [], errors: unknown[][] = [], exits: number[] = [];
   const target = { log: (...args: unknown[]) => { output.push(args); }, error: (...args: unknown[]) => { errors.push(args); } };
   const exit = (code: number) => { exits.push(code); throw new Error(`exit ${code}`); };
-  return { runtime: new Markrun(source, { exit, ...options, console: target }), output, errors, exits };
+  return { runtime: new Readrun(source, { exit, ...options, console: target }), output, errors, exits };
 }
 function errorCode(code: string, text?: RegExp) {
-  return (error: unknown) => error instanceof MarkrunError && error.code === code && (!text || text.test(error.message));
+  return (error: unknown) => error instanceof ReadrunError && error.code === code && (!text || text.test(error.message));
 }
 
 // Entry
@@ -66,7 +66,7 @@ test("frontmatter can end with ..., and an unclosed --- on the first line is ord
 });
 
 test("backticks and code blocks make no difference to placeholders", async () => {
-  const runtime = new Markrun(doc(marker('A'), 'Hi {{ name }}, `{{ name }}`', '```text', '{{ name }}', '```'));
+  const runtime = new Readrun(doc(marker('A'), 'Hi {{ name }}, `{{ name }}`', '```text', '{{ name }}', '```'));
   assert.equal(await runtime.render('A', { name: 'Ada' }), 'Hi Ada, `Ada`\n```text\nAda\n```');
 });
 
@@ -122,7 +122,7 @@ test("passed values fill placeholders", async () => {
 });
 
 test("passed values are variables in the section's code", async () => {
-  const runtime = new Markrun(doc(marker('Math'), fence('console.log(input * 2)')));
+  const runtime = new Readrun(doc(marker('Math'), fence('console.log(input * 2)')));
   assert.equal(await runtime.render('Math', { input: 4 }), '8');
 });
 
@@ -133,43 +133,43 @@ test("an object can be passed as is; its keys become the section's names", async
 });
 
 test("a placeholder without a value is printed as written", async () => {
-  const runtime = new Markrun(doc(marker('A'), 'Hi {{ name }}, `{{ missing }}` {{ also.missing }}'));
+  const runtime = new Readrun(doc(marker('A'), 'Hi {{ name }}, `{{ missing }}` {{ also.missing }}'));
   assert.equal(await runtime.render('A', { name: 'Ada' }), 'Hi Ada, `{{ missing }}` {{ also.missing }}');
 });
 
 test("values must be an object", async () => {
-  const runtime = new Markrun(marker('A'));
+  const runtime = new Readrun(marker('A'));
   await assert.rejects(() => runtime.render('A', 'text' as never), errorCode('VALUE', /must be an object/));
 });
 
 test("a value may not reuse a name the section declares", async () => {
-  const runtime = new Markrun(doc(marker('A'), fence('const title = "own";')));
+  const runtime = new Readrun(doc(marker('A'), fence('const title = "own";')));
   await assert.rejects(() => runtime.render('A', { title: 'passed' }), errorCode('VALUE', /same name/));
 });
 
 test("keys that are not variable names still fill placeholders", async () => {
-  const runtime = new Markrun(doc(marker('A'), '{{ first-name }} {{ arguments }}'));
+  const runtime = new Readrun(doc(marker('A'), '{{ first-name }} {{ arguments }}'));
   assert.equal(await runtime.render('A', { 'first-name': 'Ada', arguments: 'x y' }), 'Ada x y');
 });
 
 test("placeholders follow own-property paths, and preserve false and zero", async () => {
-  const runtime = new Markrun(doc(marker('A'), '{{ user.name }} {{ list.length }} {{ n }} {{ ok }} [{{ none }}]'));
+  const runtime = new Readrun(doc(marker('A'), '{{ user.name }} {{ list.length }} {{ n }} {{ ok }} [{{ none }}]'));
   assert.equal(await runtime.render('A', { user: { name: 'Ada' }, list: [1, 2], n: 0, ok: false, none: null }), 'Ada 2 0 false []');
 });
 
 test("prototype properties are never reachable from placeholders", async () => {
-  const runtime = new Markrun(doc(marker('A'), '{{ obj.inherited }}'));
+  const runtime = new Readrun(doc(marker('A'), '{{ obj.inherited }}'));
   assert.equal(await runtime.render('A', { obj: Object.create({ inherited: 'secret' }) }), '{{ obj.inherited }}');
 });
 
 test("values are data, never executable source", async () => {
-  const runtime = new Markrun(doc(marker('A'), '{{ value }}'));
+  const runtime = new Readrun(doc(marker('A'), '{{ value }}'));
   const value = '```ts\nthrow new Error("must not execute")\n```';
   assert.equal(await runtime.render('A', { value }), value);
 });
 
 test("section output is text and printed output, in file order", async () => {
-  const runtime = new Markrun(doc(marker('A'), '# Top', fence('console.log("middle")'), 'Bottom'));
+  const runtime = new Readrun(doc(marker('A'), '# Top', fence('console.log("middle")'), 'Bottom'));
   assert.equal(await runtime.render('A'), '# Top\nmiddle\nBottom');
 });
 
@@ -182,7 +182,7 @@ test("a section's printing is captured, but console.error still goes to stderr",
 
 test("sections can render their own children in place", async () => {
   const source = doc(marker('List'), '# {{ title }}', fence('for (const item of items) { $: line = "Line", { item }; console.log(line); }'), 'Done', marker('Line'), '- {{ item }}');
-  const runtime = new Markrun(source);
+  const runtime = new Readrun(source);
   assert.equal(await runtime.render('List', { title: 'Items', items: ['a', 'b'] }), '# Items\n- a\n- b\nDone');
 });
 
@@ -194,12 +194,12 @@ test("each render runs the section again, with its own values", async () => {
 });
 
 test("sections can await", async () => {
-  const runtime = new Markrun(doc(marker('A'), fence('const n = await Promise.resolve(2);\nconsole.log(n);')));
+  const runtime = new Readrun(doc(marker('A'), fence('const n = await Promise.resolve(2);\nconsole.log(n);')));
   assert.equal(await runtime.render('A'), '2');
 });
 
 test("section code shares scope across its fences", async () => {
-  const runtime = new Markrun(doc(marker('Math'), fence('const base: number = 7;'), 'Middle', fence('console.log(base + 1)')));
+  const runtime = new Readrun(doc(marker('Math'), fence('const base: number = 7;'), 'Middle', fence('console.log(base + 1)')));
   assert.equal(await runtime.render('Math'), 'Middle\n8');
 });
 
@@ -243,20 +243,20 @@ test("a $: { } block only holds renders that don't use each other", () => {
     ['$: {\n  a = "A";\n  a = "A";\n}', /assigned twice/],
   ];
   for (const [code, message] of cases) {
-    const runtime = new Markrun(doc(fence(code), marker('A')));
+    const runtime = new Readrun(doc(fence(code), marker('A')));
     assert.throws(() => runtime.check(), errorCode('RENDER', message), code);
   }
 });
 
 test("names from a $: { } block count as the section's own names", async () => {
-  const runtime = new Markrun(doc(marker('Outer'), fence('$: {\n  inner = "Inner";\n}\nconsole.log(inner);'), marker('Inner'), 'in'));
+  const runtime = new Readrun(doc(marker('Outer'), fence('$: {\n  inner = "Inner";\n}\nconsole.log(inner);'), marker('Inner'), 'in'));
   assert.equal(await runtime.render('Outer'), 'in');
   await assert.rejects(() => runtime.render('Outer', { inner: 'x' }), errorCode('VALUE', /same name/));
 });
 
 test("$: must assign a plain name, inside a block, inside an async function", () => {
   for (const code of ['$: "A";', '$: a.b = "A";', '$: a += "A";', 'if (true) $: a = "A";', 'function f() { $: a = "A"; }', '$: a = "A", {}, {};']) {
-    const runtime = new Markrun(doc(fence(code), marker('A')));
+    const runtime = new Readrun(doc(fence(code), marker('A')));
     assert.throws(() => runtime.check(), errorCode('RENDER'), code);
   }
 });
@@ -275,48 +275,48 @@ test("only $: statements render; comments, strings, templates and other labels a
 });
 
 test("direct and indirect circular renders fail with a call chain", async () => {
-  const runtime = new Markrun(doc(marker('A'), fence('$: b = "B";'), marker('B'), fence('$: a = "A";')));
+  const runtime = new Readrun(doc(marker('A'), fence('$: b = "B";'), marker('B'), fence('$: a = "A";')));
   await assert.rejects(() => runtime.render('A'), errorCode('CYCLE', /A .* -> B .* -> A/));
 });
 
 test("the same section can be rendered concurrently", async () => {
-  const runtime = new Markrun(doc(marker('A'), fence('await Promise.resolve(); console.log(n);')));
+  const runtime = new Readrun(doc(marker('A'), fence('await Promise.resolve(); console.log(n);')));
   assert.deepEqual(await Promise.all([runtime.render('A', { n: 1 }), runtime.render('A', { n: 2 })]), ['1', '2']);
 });
 
 test("failed renders do not block later renders", async () => {
-  const runtime = new Markrun(doc(marker('Broken'), fence('throw new Error("boom")'), marker('Fine'), 'ok'));
+  const runtime = new Readrun(doc(marker('Broken'), fence('throw new Error("boom")'), marker('Fine'), 'ok'));
   await assert.rejects(() => runtime.render('Broken'), errorCode('EXECUTION'));
   assert.equal(await runtime.render('Fine'), 'ok');
 });
 
 test("runtime errors identify the executing fence's source line", async () => {
-  const runtime = new Markrun(doc(marker('Broken'), fence('const n = 1'), 'text', fence('throw new Error("boom")')), { filename: '/tmp/source.md' });
-  await assert.rejects(() => runtime.render('Broken'), (error: unknown) => error instanceof MarkrunError && error.code === 'EXECUTION' && error.line === 7 && error.cause instanceof Error);
+  const runtime = new Readrun(doc(marker('Broken'), fence('const n = 1'), 'text', fence('throw new Error("boom")')), { filename: '/tmp/source.md' });
+  await assert.rejects(() => runtime.render('Broken'), (error: unknown) => error instanceof ReadrunError && error.code === 'EXECUTION' && error.line === 7 && error.cause instanceof Error);
 });
 
 test("parser diagnostics identify the original Markdown line", async () => {
-  const runtime = new Markrun(doc('intro', 'more prose', fence('const = ;')), { filename: '/tmp/syntax.md' });
-  await assert.rejects(() => runtime.run(), (error: unknown) => error instanceof MarkrunError && error.code === 'SYNTAX' && error.line === 4);
+  const runtime = new Readrun(doc('intro', 'more prose', fence('const = ;')), { filename: '/tmp/syntax.md' });
+  await assert.rejects(() => runtime.run(), (error: unknown) => error instanceof ReadrunError && error.code === 'SYNTAX' && error.line === 4);
 });
 
 // route()
 
 test("route prints the section and exits when one of its flags is passed", async () => {
-  const { runtime, output, exits } = capture(doc(fence('import { route } from "markrun";\nawait route("Help", ["-h", "--help"]);\nconsole.log("main");'), marker('Help'), 'Usage: demo'), { args: ['--help'] });
+  const { runtime, output, exits } = capture(doc(fence('import { route } from "readrun";\nawait route("Help", ["-h", "--help"]);\nconsole.log("main");'), marker('Help'), 'Usage: demo'), { args: ['--help'] });
   await assert.rejects(() => runtime.run(), /exit 0/);
   assert.deepEqual(output, [['Usage: demo']]);
   assert.deepEqual(exits, [0]);
 });
 
 test("route does nothing when its flags are absent", async () => {
-  const { runtime, output } = capture(doc(fence('import { route } from "markrun";\nawait route("Help", ["-h", "--help"]);\nconsole.log("main");'), marker('Help'), 'Usage'), { args: ['file.txt'] });
+  const { runtime, output } = capture(doc(fence('import { route } from "readrun";\nawait route("Help", ["-h", "--help"]);\nconsole.log("main");'), marker('Help'), 'Usage'), { args: ['file.txt'] });
   await runtime.run();
   assert.deepEqual(output, [['main']]);
 });
 
 test("route matches combined short flags and ignores arguments after --", async () => {
-  const source = doc(fence('const { route } = await import("markrun");\nawait route("V", ["-v"]);\nconsole.log("main");'), marker('V'), 'v1');
+  const source = doc(fence('const { route } = await import("readrun");\nawait route("V", ["-v"]);\nconsole.log("main");'), marker('V'), 'v1');
   const combined = capture(source, { args: ['-xv'] });
   await assert.rejects(() => combined.runtime.run(), /exit 0/);
   const escaped = capture(source, { args: ['--', '-v'] });
@@ -327,25 +327,25 @@ test("route matches combined short flags and ignores arguments after --", async 
 // Markdown structure
 
 test("section names resolve exactly and case-sensitively", async () => {
-  const runtime = new Markrun(doc(marker('Always longer'), 'x'));
+  const runtime = new Readrun(doc(marker('Always longer'), 'x'));
   await assert.rejects(() => runtime.render('Always'), errorCode('NOT_FOUND', /Available sections: "Always longer"/));
   await assert.rejects(() => runtime.render('always longer'), errorCode('NOT_FOUND'));
 });
 
 test("duplicate section names are rejected when the document is parsed", () => {
-  assert.throws(() => new Markrun(doc(marker('Same'), 'one', marker('Same'), 'two')), errorCode('DUPLICATE', /line 1/));
+  assert.throws(() => new Readrun(doc(marker('Same'), 'one', marker('Same'), 'two')), errorCode('DUPLICATE', /line 1/));
 });
 
 test("markers tolerate spacing and indentation; names are whitespace-normalized", async () => {
-  const runtime = new Markrun(doc('<!--$:Tight-->', 'a', '   <!--  $:  Spaced   out  -->', 'b'));
+  const runtime = new Readrun(doc('<!--$:Tight-->', 'a', '   <!--  $:  Spaced   out  -->', 'b'));
   assert.deepEqual(runtime.document.sections.map(section => section.name), ['Tight', 'Spaced out']);
   assert.equal(await runtime.render('Spaced out'), 'b');
   assert.equal(resolveSection(parse(marker('A')), ' A ').name, 'A');
 });
 
 test("markers without a name are rejected", () => {
-  assert.throws(() => new Markrun('<!--$: -->'), errorCode('MARKER'));
-  assert.throws(() => new Markrun('<!--$:-->'), errorCode('MARKER'));
+  assert.throws(() => new Readrun('<!--$: -->'), errorCode('MARKER'));
+  assert.throws(() => new Readrun('<!--$:-->'), errorCode('MARKER'));
 });
 
 test("markers inside executable fences are not Markdown structure", async () => {
@@ -369,7 +369,7 @@ test("shorter backticks inside a wider display fence do not close it", async () 
 });
 
 test("unclosed fences report their opening line", () => {
-  assert.throws(() => new Markrun('intro\n```ts\nx()', { filename: '/tmp/broken.md' }), (error: unknown) => error instanceof MarkrunError && error.code === 'FENCE' && error.line === 2);
+  assert.throws(() => new Readrun('intro\n```ts\nx()', { filename: '/tmp/broken.md' }), (error: unknown) => error instanceof ReadrunError && error.code === 'FENCE' && error.line === 2);
 });
 
 test("BOM and CRLF input are normalized", async () => {
@@ -397,13 +397,13 @@ test("check compiles every region but never executes code", () => {
 });
 
 test("unused invalid code is lazy, while check diagnoses it", async () => {
-  const runtime = new Markrun(doc(fence('const ok = true'), marker('Invalid'), fence('const = ;')));
+  const runtime = new Readrun(doc(fence('const ok = true'), marker('Invalid'), fence('const = ;')));
   await runtime.run();
   assert.throws(() => runtime.check(), errorCode('SYNTAX'));
 });
 
 test("static imports execute locally and dynamic imports resolve from the .md file", async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'markrun-import-'));
+  const directory = await mkdtemp(join(tmpdir(), 'readrun-import-'));
   try {
     await writeFile(join(directory, 'helper.mjs'), 'export const answer = 42;');
     const { runtime, output } = capture(doc(fence('import { basename } from "node:path"; const { answer } = await import("./helper.mjs"); console.log(answer, basename(import.meta.filename));'), marker('Local'), fence('import { basename } from "node:path"; console.log(basename(__filename));')), { filename: join(directory, 'example.md') });
@@ -414,7 +414,7 @@ test("static imports execute locally and dynamic imports resolve from the .md fi
 });
 
 test("static relative imports are resolved from the source document", async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'markrun-require-'));
+  const directory = await mkdtemp(join(tmpdir(), 'readrun-require-'));
   try {
     await writeFile(join(directory, 'helper.cjs'), 'exports.answer = 42;');
     const { runtime, output } = capture(fence('import { answer } from "./helper.cjs"; console.log(answer);'), { filename: join(directory, 'test.md') });
@@ -424,13 +424,13 @@ test("static relative imports are resolved from the source document", async () =
 });
 
 test("the internal context binding cannot collide with user identifiers", async () => {
-  const { runtime, output } = capture(doc(fence('const __markrun_context = 3; $: a = "A"; console.log(__markrun_context, a);'), marker('A'), 'a'));
+  const { runtime, output } = capture(doc(fence('const __readrun_context = 3; $: a = "A"; console.log(__readrun_context, a);'), marker('A'), 'a'));
   await runtime.run();
   assert.deepEqual(output, [[3, 'a']]);
 });
 
 test("runFile reads and runs a real .md file", async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'markrun-file-'));
+  const directory = await mkdtemp(join(tmpdir(), 'readrun-file-'));
   try {
     const filename = join(directory, 'file.md');
     await writeFile(filename, doc(fence('$: a = "A"; console.log(a);'), marker('A'), 'a text'));
@@ -460,17 +460,17 @@ test("examples/basics.md works with and without arguments", async () => {
 // Compilation cache
 
 async function cacheEntries(): Promise<string[]> {
-  const dir = process.env.MARKRUN_CACHE_DIR!;
+  const dir = process.env.READRUN_CACHE_DIR!;
   return (await readdir(dir)).filter(name => name.endsWith('.json')).map(name => join(dir, name));
 }
 async function withCache(run: () => Promise<void>) {
-  const previous = { dir: process.env.MARKRUN_CACHE_DIR, off: process.env.MARKRUN_CACHE };
-  process.env.MARKRUN_CACHE_DIR = await mkdtemp(join(tmpdir(), 'markrun-cache-test-'));
-  delete process.env.MARKRUN_CACHE;
+  const previous = { dir: process.env.READRUN_CACHE_DIR, off: process.env.READRUN_CACHE };
+  process.env.READRUN_CACHE_DIR = await mkdtemp(join(tmpdir(), 'readrun-cache-test-'));
+  delete process.env.READRUN_CACHE;
   try { await run(); } finally {
-    await rm(process.env.MARKRUN_CACHE_DIR, { recursive: true, force: true });
-    process.env.MARKRUN_CACHE_DIR = previous.dir;
-    if (previous.off === undefined) delete process.env.MARKRUN_CACHE; else process.env.MARKRUN_CACHE = previous.off;
+    await rm(process.env.READRUN_CACHE_DIR, { recursive: true, force: true });
+    process.env.READRUN_CACHE_DIR = previous.dir;
+    if (previous.off === undefined) delete process.env.READRUN_CACHE; else process.env.READRUN_CACHE = previous.off;
   }
 }
 async function tamper(from: string, to: string) {
@@ -481,7 +481,7 @@ async function tamper(from: string, to: string) {
 }
 const cached = fence('console.log("compiled")');
 
-test("compiled output is cached in MARKRUN_CACHE_DIR and reused by later runs", () => withCache(async () => {
+test("compiled output is cached in READRUN_CACHE_DIR and reused by later runs", () => withCache(async () => {
   await capture(cached).runtime.run();
   assert.ok((await cacheEntries()).length > 0);
   await tamper('compiled', 'from cache');
@@ -490,10 +490,10 @@ test("compiled output is cached in MARKRUN_CACHE_DIR and reused by later runs", 
   assert.deepEqual(again.output, [['from cache']]);
 }));
 
-test("MARKRUN_CACHE=0 neither reads nor writes the cache", () => withCache(async () => {
+test("READRUN_CACHE=0 neither reads nor writes the cache", () => withCache(async () => {
   await capture(cached).runtime.run();
   await tamper('compiled', 'from cache');
-  process.env.MARKRUN_CACHE = '0';
+  process.env.READRUN_CACHE = '0';
   const fresh = capture(cached);
   await fresh.runtime.run();
   assert.deepEqual(fresh.output, [['compiled']]);

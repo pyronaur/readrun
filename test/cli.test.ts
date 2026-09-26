@@ -7,8 +7,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mkdtempSync } from "node:fs";
 
-// Never touch the real ~/.cache/markrun from tests.
-process.env.MARKRUN_CACHE_DIR = mkdtempSync(join(tmpdir(), "markrun-cache-"));
+// Never touch the real ~/.cache/readrun from tests.
+process.env.READRUN_CACHE_DIR = mkdtempSync(join(tmpdir(), "readrun-cache-"));
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const bun = Boolean((globalThis as typeof globalThis & { Bun?: unknown }).Bun);
@@ -22,7 +22,7 @@ function cli(args: string[]) {
 test('CLI help works without executing a file', () => {
   const result = cli(['--help']);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /^Markrun: run Markdown files as commands/);
+  assert.match(result.stdout, /^Readrun: run Markdown files as commands/);
 });
 
 test('CLI --list names every section without running the entry', () => {
@@ -40,7 +40,7 @@ test('CLI --check validates the example without evaluating Bun-specific code', (
 });
 
 test('CLI normalizes argv and passes user arguments', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'markrun-cli-'));
+  const directory = await mkdtemp(join(tmpdir(), 'readrun-cli-'));
   try {
     const filename = join(directory, 'args.md');
     await writeFile(filename, '```ts run\nconsole.log(process.argv.slice(2).join("|"));\n```');
@@ -51,7 +51,7 @@ test('CLI normalizes argv and passes user arguments', async () => {
 });
 
 test('CLI returns nonzero and useful diagnostics on execution failure', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'markrun-failure-'));
+  const directory = await mkdtemp(join(tmpdir(), 'readrun-failure-'));
   try {
     const filename = join(directory, 'bad.md');
     await writeFile(filename, '```ts run\nthrow new Error("intentional failure")\n```');
@@ -65,7 +65,7 @@ test('CLI --version prints the version from package.json', () => {
   for (const flag of ['--version', '-v']) {
     const result = cli([flag]);
     assert.equal(result.status, 0, result.stderr);
-    assert.match(result.stdout, /^markrun \d+\.\d+\.\d+\n$/);
+    assert.match(result.stdout, /^readrun \d+\.\d+\.\d+\n$/);
   }
 });
 
@@ -73,12 +73,12 @@ test('CLI rejects unknown options and a missing file argument with usage and exi
   for (const args of [['--nope', 'examples/basics.md'], [], ['--check']]) {
     const result = cli(args);
     assert.equal(result.status, 2, JSON.stringify(args));
-    assert.match(result.stderr, /^mr: .*\n\nMarkrun: run Markdown files as commands/);
+    assert.match(result.stderr, /^readrun: .*\n\nReadrun: run Markdown files as commands/);
   }
 });
 
 test('CLI passes options after the file to the script', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'markrun-options-'));
+  const directory = await mkdtemp(join(tmpdir(), 'readrun-options-'));
   try {
     const filename = join(directory, 'options.md');
     await writeFile(filename, '```ts run\nconsole.log(process.argv.slice(2).join("|"));\n```');
@@ -103,5 +103,5 @@ test('README.md runs: the introduction lists chapters, and every chapter renders
     const result = cli(['README.md', chapter]);
     assert.equal(result.status, 0, `${chapter}: ${result.stderr}`);
   }
-  assert.match(cli(['README.md', 'values']).stdout, /> Hello Ada, this line was filled in by Markrun\./);
+  assert.match(cli(['README.md', 'values']).stdout, /> Hello Ada, this line was filled in by Readrun\./);
 });
