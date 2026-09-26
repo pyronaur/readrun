@@ -61,10 +61,37 @@ test('CLI returns nonzero and useful diagnostics on execution failure', async ()
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
+test('CLI --version prints the version from package.json', () => {
+  for (const flag of ['--version', '-v']) {
+    const result = cli([flag]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /^markrun \d+\.\d+\.\d+\n$/);
+  }
+});
+
+test('CLI rejects unknown options and a missing file argument with usage and exit 2', () => {
+  for (const args of [['--nope', 'examples/basics.md'], [], ['--check']]) {
+    const result = cli(args);
+    assert.equal(result.status, 2, JSON.stringify(args));
+    assert.match(result.stderr, /^mr: .*\n\nMarkrun: run Markdown files as commands/);
+  }
+});
+
+test('CLI passes options after the file to the script', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'markrun-options-'));
+  try {
+    const filename = join(directory, 'options.md');
+    await writeFile(filename, '```ts run\nconsole.log(process.argv.slice(2).join("|"));\n```');
+    const result = cli(['--', filename, '--flag', '-v']);
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, '--flag|-v\n');
+  } finally { await rm(directory, { recursive: true, force: true }); }
+});
+
 test('CLI fails for a missing file', () => {
   const result = cli(['does-not-exist.md']);
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /ENOENT/);
+  assert.equal(result.stderr, '[FILE] Cannot read does-not-exist.md (ENOENT).\n');
 });
 
 test('README.md runs: the introduction lists chapters, and every chapter renders', { skip: bun ? false : 'README.md uses Bun.argv; it needs the real Bun runtime.' }, () => {

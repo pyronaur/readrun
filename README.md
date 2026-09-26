@@ -46,6 +46,7 @@ The `mr` binary includes the Bun runtime and the TypeScript compiler, and runs a
 mr file.md [arguments...]     # run the file
 mr --check file.md            # syntax-check every block without running anything
 mr --list file.md             # list section names
+mr --version                  # print the Markrun version
 bun test                      # run the tests
 bun run check                 # type-check Markrun itself
 ```
@@ -171,6 +172,8 @@ Inside a section, passed values are `const` variables in its code and fill its p
 - Values are not Markdown-escaped, and they are never executed.
 - Every render runs the section again with fresh variables. Each section has its own scope, separate from its caller.
 
+Code computes, and sections write. A render returns text, so compute the data a caller needs (counts, records, decisions) in code and pass it to sections as values. Keep text meant for people in sections rather than assembling Markdown in code. When a section works something out itself, it renders a smaller section with what it found.
+
 A live example. On GitHub you see its code and the `Greeting` template below it; with `mr README.md values` you see the result:
 
 ```ts run
@@ -224,13 +227,13 @@ const { values: flags, positionals } = parseArgs({
   allowPositionals: true,
 });
 
-const text = process.stdin.isTTY ? undefined : await Bun.stdin.text();
-const data = await Bun.stdin.json();            // one JSON value
-const rows = Bun.JSONL.parse(await Bun.stdin.text());
+// Optional input: read stdin only when no input arguments were given.
+const piped = positionals.length === 0 && !process.stdin.isTTY ? (await Bun.stdin.text()).trim() : '';
 ```
 
-- `process.stdin.isTTY` is true when nothing is piped. Without the check, reading stdin in a terminal waits for Ctrl-D, like `cat`.
-- `Bun.JSONL.parse` stops at the first invalid line and returns what it parsed so far.
+- Stdin can be read once: `await Bun.stdin.text()`, `await Bun.stdin.json()` for one JSON value, or `Bun.JSONL.parse(await Bun.stdin.text())` for JSON Lines. `Bun.JSONL.parse` stops at the first invalid line and returns what it parsed so far.
+- A read finishes when the caller closes stdin. In a terminal (`process.stdin.isTTY`) it waits for Ctrl-D. Programs such as Claude Code, Node and Bun pass a socket, and a caller that never closes it, like some agent shells, makes a read wait forever. So when input is optional, let the arguments decide, the way `cat` does, and treat an empty read as nothing piped. When testing such a tool from an agent's shell, pipe input in or add `< /dev/null`.
+- A wrong flag makes `parseArgs` throw, which exits 1. For a friendlier error, catch it, `console.error` a rendered usage section, and `process.exit(2)`.
 - `route(name, flags)` matches exact flags, combined short flags such as `-vh`, and ignores arguments after `--`. Put routes before `parseArgs` so a strict parser never sees them.
 - Write errors to stderr with `console.error`, and set the exit code with `process.exit`.
 
@@ -245,7 +248,7 @@ Hooks read JSON on stdin and answer with exit codes, stdout and stderr, so a Mar
 const input = await Bun.stdin.json();
 const command = input.tool_input?.command ?? '';
 
-if (/\brm\s+-[a-z]*r[a-z]*f/.test(command)) {
+if (/\brm\s+-[a-z]*(r[a-z]*f|f[a-z]*r)/.test(command)) {
   $: reason = 'Denied', { command };
   console.log(JSON.stringify({
     hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason },
@@ -259,6 +262,7 @@ Blocked `{{ command }}`. Ask the user to run it, or delete specific files instea
 
 - For hooks that answer in JSON, keep the entry free of text and put notes in comments: stdout must be only the JSON object.
 - For SessionStart and UserPromptSubmit hooks, plain stdout becomes context for Claude, so the file's own text is the context.
+- A hook reads files next to itself through `__dirname`, for example `join(__dirname, 'protected.txt')`, since hooks run from the project's directory.
 - Point the hook at the full path of `mr`, for example `"$HOME/.local/bin/mr" "$CLAUDE_PROJECT_DIR/.claude/hooks/guard.md"`. Hooks may not see your shell's `PATH`.
 
 <!--$: structure -->
