@@ -1,4 +1,6 @@
-import ts from "typescript";
+import { createRequire } from "node:module";
+import type TS from "typescript";
+import { cacheKey, readCache, writeCache } from "./cache.ts";
 import { MarkrunError } from "./errors.ts";
 import type { ParsedDocument, Region } from "./parser.ts";
 
@@ -24,6 +26,15 @@ const reserved = new Set(("break case catch class const continue debugger defaul
   + "function if import in instanceof new null return super switch this throw true try typeof var void while with yield let static "
   + "implements interface package private protected public await arguments eval").split(" "));
 
+/**
+ * TypeScript takes ~100 ms to load, so it is loaded only when something isn't cached yet.
+ * The literal require() lets `bun build --compile` bundle it; Node uses createRequire.
+ */
+let loaded: typeof TS | undefined;
+function typescript(): typeof TS {
+  return loaded ??= typeof require === "function" ? require("typescript") : createRequire(import.meta.url)("typescript");
+}
+
 /** A passed value becomes a variable only when its key is a usable identifier. */
 export const isVariableName = (name: string): boolean => /^[A-Za-z_$][\w$]*$/.test(name) && !reserved.has(name);
 
@@ -44,13 +55,18 @@ function regionSource(document: ParsedDocument, region: Region, internal: string
   return lines.join("\n");
 }
 
-function bindingNames(name: ts.BindingName, into: Set<string>): void {
+function bindingNames(name: TS.BindingName, into: Set<string>): void {
+  const ts = typescript();
   if (ts.isIdentifier(name)) into.add(name.text);
   else for (const element of name.elements) if (!ts.isOmittedExpression(element)) bindingNames(element.name, into);
 }
 
 /** Names a section declares at its top level. A passed value must not reuse one. */
 export function declaredNames(document: ParsedDocument, region: Region): Set<string> {
+  const key = cacheKey(codegen, "names", document.source, region.id);
+  const hit = readCache<string[]>(key);
+  if (Array.isArray(hit)) return new Set(hit);
+  const ts = typescript();
   const names = new Set<string>();
   const source = ts.createSourceFile("region.ts", regionSource(document, region, "__markrun_context", []), ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
   for (const statement of source.statements) {
@@ -67,13 +83,15 @@ export function declaredNames(document: ParsedDocument, region: Region): Set<str
       if (pull) names.add(pull.target.text);
     }
   }
+  writeCache(key, [...names]);
   return names;
 }
 
 /** `$: target = name` or `$: target = name, values`. */
-function pullParts(node: ts.LabeledStatement): { target: ts.Identifier; name: ts.Expression; values?: ts.Expression } | undefined {
+function pullParts(node: TS.LabeledStatement): { target: TS.Identifier; name: TS.Expression; values?: TS.Expression } | undefined {
+  const ts = typescript();
   let expression = ts.isExpressionStatement(node.statement) ? node.statement.expression : undefined;
-  let values: ts.Expression | undefined;
+  let values: TS.Expression | undefined;
   if (expression && ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.CommaToken) {
     values = expression.right;
     expression = expression.left;
@@ -91,13 +109,38 @@ export function compileRegion(document: ParsedDocument, region: Region, globals:
       throw new MarkrunError("BINDING", `Invalid or reserved injected global ${JSON.stringify(name)}.`, document.filename);
     }
   }
+  const key = cacheKey(codegen, "region", document.source, region.id, internal, globals.join(","), values.join(","));
+  let output = readCache<string>(key);
+  if (typeof output !== "string") {
+    output = transpile(document, region, internal, values);
+    writeCache(key, output);
+  }
+
+  let executable: Function;
+  try {
+    const sourceURL = `${document.filename.replace(/[\r\n]/g, "")}.${region.id.replace(":", "-")}.js`;
+    executable = new AsyncFunction(internal, ...parameters, ...globals, `${output}\n//# sourceURL=${sourceURL}`);
+  } catch (cause) {
+    throw new MarkrunError("SYNTAX", `Cannot compile ${region.name}: ${cause instanceof Error ? cause.message : String(cause)}`, document.filename, region.line, cause);
+  }
+
+  return context => executable(
+    context, context.console, context.require, context.module, context.module.exports,
+    context.filename, context.dirname,
+    ...globals.map(name => context.globals[name]),
+  );
+}
+
+/** Rewrite `$:` pulls, imports and import.meta, then strip types. Only successful output is cached. */
+function transpile(document: ParsedDocument, region: Region, internal: string, values: string[]): string {
+  const ts = typescript();
   const input = regionSource(document, region, internal, values);
 
-  const transformer: ts.TransformerFactory<ts.SourceFile> = context => {
+  const transformer: TS.TransformerFactory<TS.SourceFile> = context => {
     const factory = context.factory;
     const member = (name: string) => factory.createPropertyAccessExpression(factory.createIdentifier(internal), name);
 
-    function visit(node: ts.Node): ts.VisitResult<ts.Node> {
+    function visit(node: TS.Node): TS.VisitResult<TS.Node> {
       if (ts.isTypeNode(node)) return node;
       // `$: md = 'Section', values` becomes `const md = await pull('Section', values)`.
       if (ts.isLabeledStatement(node) && node.label.text === "$") {
@@ -109,13 +152,13 @@ export function compileRegion(document: ParsedDocument, region: Region, globals:
         if (!ts.isBlock(node.parent) && !ts.isSourceFile(node.parent) && !ts.isCaseOrDefaultClause(node.parent)) {
           throw new MarkrunError("PULL", "A $: pull declares a variable, so it needs its own block. Wrap it in { }.", document.filename, line);
         }
-        let owner: ts.Node | undefined = node.parent;
+        let owner: TS.Node | undefined = node.parent;
         while (owner && !ts.isFunctionLike(owner)) owner = owner.parent;
         if (owner && !ts.canHaveModifiers(owner)) owner = undefined;
-        if (owner && !ts.getModifiers(owner as ts.HasModifiers)?.some(modifier => modifier.kind === ts.SyntaxKind.AsyncKeyword)) {
+        if (owner && !ts.getModifiers(owner as TS.HasModifiers)?.some(modifier => modifier.kind === ts.SyntaxKind.AsyncKeyword)) {
           throw new MarkrunError("PULL", "A $: pull waits for the section, so the function around it must be async.", document.filename, line);
         }
-        const args = [pull.name, ...(pull.values ? [pull.values] : [])].map(arg => ts.visitNode(arg, visit) as ts.Expression);
+        const args = [pull.name, ...(pull.values ? [pull.values] : [])].map(arg => ts.visitNode(arg, visit) as TS.Expression);
         const call = factory.createAwaitExpression(factory.createCallExpression(member("pull"), undefined, args));
         return factory.createVariableStatement(undefined, factory.createVariableDeclarationList(
           [factory.createVariableDeclaration(pull.target.text, undefined, undefined, call)], ts.NodeFlags.Const,
@@ -123,12 +166,12 @@ export function compileRegion(document: ParsedDocument, region: Region, globals:
       }
       if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
         // Resolve dynamic imports relative to the .mr file, not this interpreter module.
-        return factory.createCallExpression(member("importModule"), undefined, node.arguments.map(arg => ts.visitNode(arg, visit) as ts.Expression));
+        return factory.createCallExpression(member("importModule"), undefined, node.arguments.map(arg => ts.visitNode(arg, visit) as TS.Expression));
       }
       if (ts.isMetaProperty(node) && node.keywordToken === ts.SyntaxKind.ImportKeyword) return member("meta");
       return ts.visitEachChild(node, visit, context);
     }
-    return source => ts.visitNode(source, visit) as ts.SourceFile;
+    return source => ts.visitNode(source, visit) as TS.SourceFile;
   };
 
   const result = ts.transpileModule(input, {
@@ -151,18 +194,8 @@ export function compileRegion(document: ParsedDocument, region: Region, globals:
       ? diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start).line + 1 : region.line;
     throw new MarkrunError("SYNTAX", ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n"), document.filename, line);
   }
-
-  let executable: Function;
-  try {
-    const sourceURL = `${document.filename.replace(/[\r\n]/g, "")}.${region.id.replace(":", "-")}.js`;
-    executable = new AsyncFunction(internal, ...parameters, ...globals, `${result.outputText}\n//# sourceURL=${sourceURL}`);
-  } catch (cause) {
-    throw new MarkrunError("SYNTAX", `Cannot compile ${region.name}: ${cause instanceof Error ? cause.message : String(cause)}`, document.filename, region.line, cause);
-  }
-
-  return context => executable(
-    context, context.console, context.require, context.module, context.module.exports,
-    context.filename, context.dirname,
-    ...globals.map(name => context.globals[name]),
-  );
+  return result.outputText;
 }
+
+/** Changes whenever the code generation changes, so a new Markrun never reuses old output. */
+const codegen = cacheKey("markrun-codegen", ...[regionSource, pullParts, declaredNames, compileRegion, transpile].map(String));

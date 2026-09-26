@@ -7,13 +7,14 @@ Recorded on September 26, 2026.
 | Check | Result |
 | --- | --- |
 | TypeScript source type-check: `tsc --noEmit` | Passed |
-| Core-language tests | 57 passed |
+| Core-language tests, including the compilation cache | 61 passed |
 | Explicit CLI subprocess tests | 6 passed |
 | Native Bun loader, Bun.argv parity and kitchen-sink tests | 8 passed under Bun; skipped under Node |
-| Entire test suite under Bun (`bun test`) | 71 tests: 71 passed, 0 failed |
-| Entire test suite under Node (`npm run test:node`) | 71 tests: 63 passed, 0 failed, 8 skipped |
+| Entire test suite under Bun (`bun test`) | 75 tests: 75 passed, 0 failed |
+| Entire test suite under Node (`npm run test:node`) | 75 tests: 67 passed, 0 failed, 8 skipped |
 | `examples/parameters.mr Ada` via the CLI | Passed |
 | `examples/async-entry.mr` via the native Bun loader | Passed |
+| Compiled `mr` (bytecode) with a warm cache, measured with hyperfine | about 19 ms per run for a small hook, 49 ms with `MARKRUN_CACHE=0` |
 | `kitchen-sink.mr` against the real PokeAPI: names, piped names, `--json`, an unknown Pokémon, no input, `-h` | Passed |
 
 Environment: macOS, Bun 1.4.0, TypeScript 5.8.3, and @types/node 24.0.4.

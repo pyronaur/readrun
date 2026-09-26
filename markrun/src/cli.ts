@@ -42,7 +42,9 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   await document.run();
 }
 
-if (process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url) {
+// import.meta.main also works in bytecode builds, where import.meta.url is the original source path.
+const isMain = (import.meta as { main?: boolean }).main ?? (!!process.argv[1] && pathToFileURL(resolve(process.argv[1])).href === import.meta.url);
+if (isMain) {
   main().catch((error: unknown) => {
     if (error instanceof MarkrunError) {
       console.error(`[${error.code}] ${error.message}`);

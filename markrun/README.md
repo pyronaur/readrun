@@ -201,6 +201,17 @@ This is intentionally not a complete CommonMark parser. Structural syntax is lim
 
 Inline Markdown code spans remain prose. Tilde fences, other language labels, and annotated labels such as `ts noexec` remain display-only and are printed. Nesting executable fences inside blockquotes, lists, or arbitrary HTML blocks is not supported. Use top-level fences. Unclosed fences and markers without a name are errors.
 
+### Compilation cache
+
+Compiled code is cached in `~/.cache/markrun/` (or `$XDG_CACHE_HOME/markrun/`), so a repeat run doesn't load the TypeScript compiler. Only `mr` reads or writes that folder, and nothing is written next to your files. Entries are keyed by the file's contents, the section, the passed value names and Markrun's own code generation, so edits and upgrades always compile fresh. Only successful compiles are stored, and a damaged entry is compiled again. Deleting the folder is always safe.
+
+```sh
+MARKRUN_CACHE=0 mr file.mr              # no cache: always compile, read and write nothing
+MARKRUN_CACHE_DIR=/tmp/mr mr file.mr    # use a different folder
+```
+
+The compiled `mr` is built with Bun's `--bytecode`, so it starts in about 15 ms. A cached run of a small file takes about 20 ms, compared with about 50 ms when it has to compile. That keeps it practical for frequent callers such as Claude Code hooks.
+
 ## Embedding
 
 ```ts
@@ -229,6 +240,7 @@ await runFile('./example.mr');
 src/parser.ts       Markdown structure, section markers and name resolution
 src/compiler.ts     TypeScript AST rewriting and region compilation
 src/markdown.ts     Placeholder interpolation
+src/cache.ts        Compilation cache
 src/runtime.ts      Rendering, pulls, route() and cycle detection
 src/register.js     Bun's native .mr module loader
 src/cli.ts          Explicit runner, --check and --list

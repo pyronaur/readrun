@@ -5,6 +5,10 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkdtempSync } from "node:fs";
+
+// Never touch the real ~/.cache/markrun from tests.
+process.env.MARKRUN_CACHE_DIR = mkdtempSync(join(tmpdir(), "markrun-cache-"));
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const isBun = Boolean((globalThis as typeof globalThis & { Bun?: unknown }).Bun);

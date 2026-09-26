@@ -15,7 +15,7 @@
     "test": "bun test",
     "test:node": "node --experimental-strip-types --test test/*.test.ts",
     "check": "tsc --noEmit",
-    "build": "bun build ./src/cli.ts --compile --no-compile-autoload-bunfig --outfile ./dist/mr",
+    "build": "bun build ./src/cli.ts --compile --bytecode --no-compile-autoload-bunfig --outfile ./dist/mr",
     "mr": "bun ./src/cli.ts"
   },
   "dependencies": {

@@ -1,9 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkdtempSync } from "node:fs";
+
+// Never touch the real ~/.cache/markrun from tests.
+process.env.MARKRUN_CACHE_DIR = mkdtempSync(join(tmpdir(), "markrun-cache-"));
 import { Markrun, MarkrunError, parse, resolveSection, runFile } from "../src/index.ts";
 import type { MarkrunOptions } from "../src/index.ts";
 
@@ -396,3 +400,67 @@ test("the example works with and without arguments", async () => {
     assert.doesNotMatch(text, /```ts/);
   }
 });
+
+// Compilation cache
+
+async function cacheEntries(): Promise<string[]> {
+  const dir = process.env.MARKRUN_CACHE_DIR!;
+  return (await readdir(dir)).filter(name => name.endsWith('.json')).map(name => join(dir, name));
+}
+async function withCache(run: () => Promise<void>) {
+  const previous = { dir: process.env.MARKRUN_CACHE_DIR, off: process.env.MARKRUN_CACHE };
+  process.env.MARKRUN_CACHE_DIR = await mkdtemp(join(tmpdir(), 'markrun-cache-test-'));
+  delete process.env.MARKRUN_CACHE;
+  try { await run(); } finally {
+    await rm(process.env.MARKRUN_CACHE_DIR, { recursive: true, force: true });
+    process.env.MARKRUN_CACHE_DIR = previous.dir;
+    if (previous.off === undefined) delete process.env.MARKRUN_CACHE; else process.env.MARKRUN_CACHE = previous.off;
+  }
+}
+async function tamper(from: string, to: string) {
+  for (const file of await cacheEntries()) {
+    const text = await readFile(file, 'utf8');
+    if (text.includes(from)) await writeFile(file, text.replace(from, to));
+  }
+}
+const cached = fence('console.log("compiled")');
+
+test("compiled output is cached in MARKRUN_CACHE_DIR and reused by later runs", () => withCache(async () => {
+  await capture(cached).runtime.run();
+  assert.ok((await cacheEntries()).length > 0);
+  await tamper('compiled', 'from cache');
+  const again = capture(cached);
+  await again.runtime.run();
+  assert.deepEqual(again.output, [['from cache']]);
+}));
+
+test("MARKRUN_CACHE=0 neither reads nor writes the cache", () => withCache(async () => {
+  await capture(cached).runtime.run();
+  await tamper('compiled', 'from cache');
+  process.env.MARKRUN_CACHE = '0';
+  const fresh = capture(cached);
+  await fresh.runtime.run();
+  assert.deepEqual(fresh.output, [['compiled']]);
+  const other = capture(fence('console.log("never cached")'));
+  await other.runtime.run();
+  for (const file of await cacheEntries()) assert.doesNotMatch(await readFile(file, 'utf8'), /never cached/);
+}));
+
+test("a damaged cache entry is compiled again", () => withCache(async () => {
+  await capture(cached).runtime.run();
+  for (const file of await cacheEntries()) await writeFile(file, '{not json');
+  const again = capture(cached);
+  await again.runtime.run();
+  assert.deepEqual(again.output, [['compiled']]);
+}));
+
+test("editing a file means a fresh compile, and errors are never cached", () => withCache(async () => {
+  await capture(cached).runtime.run();
+  await tamper('compiled', 'from cache');
+  const edited = capture(fence('console.log("compiled") '));
+  await edited.runtime.run();
+  assert.deepEqual(edited.output, [['compiled']]);
+  const broken = fence('const = ;');
+  await assert.rejects(() => capture(broken).runtime.run(), errorCode('SYNTAX'));
+  await assert.rejects(() => capture(broken).runtime.run(), errorCode('SYNTAX'));
+}));
