@@ -1,7 +1,7 @@
 import { MarkrunError } from "./errors.ts";
 
 export interface Token {
-  kind: "text" | "comment" | "marker" | "code";
+  kind: "text" | "comment" | "frontmatter" | "marker" | "code";
   raw: string;
   line: number;
   endLine: number;
@@ -37,13 +37,17 @@ const executableLanguages = new Set(["", "ts", "typescript", "js", "javascript"]
 export const normalizeName = (value: string): string => value.trim().replace(/\s+/g, " ");
 
 /** A deliberate Markdown subset: `<!--$: Name -->` section markers and top-level fenced blocks. */
-export function parse(source: string, filename = "document.mr"): ParsedDocument {
+export function parse(source: string, filename = "document.md"): ParsedDocument {
   source = source.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
   const lines = source.split("\n");
   const tokens: Token[] = [];
   let inComment = false;
 
-  for (let i = 0; i < lines.length; i++) {
+  // A `---` block on the first line is frontmatter: information about the file, never printed.
+  const frontmatterEnd = /^---[ \t]*$/.test(lines[0] ?? "") ? lines.findIndex((line, index) => index > 0 && /^(?:---|\.\.\.)[ \t]*$/.test(line)) : -1;
+  for (let i = 0; i <= frontmatterEnd; i++) tokens.push({ kind: "frontmatter", raw: lines[i], line: i + 1, endLine: i + 1 });
+
+  for (let i = frontmatterEnd + 1; i < lines.length; i++) {
     const line = lines[i];
     const start = i;
     const marker = inComment ? null : /^ {0,3}<!--\s*\$:(.*?)-->[ \t]*$/.exec(line);
@@ -117,7 +121,7 @@ function chunksOf(tokens: Token[]): Chunk[] {
     current = [];
   };
   for (const token of tokens) {
-    if (token.kind === "comment") continue;
+    if (token.kind === "comment" || token.kind === "frontmatter") continue;
     if (token.kind === "code" && token.executable) flush();
     else current.push(token);
   }

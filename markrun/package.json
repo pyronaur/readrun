@@ -2,14 +2,13 @@
   "name": "markrun",
   "version": "0.1.0",
   "private": true,
-  "description": "Executable Markdown: pull a heading, run its code, render its text.",
+  "description": "Run Markdown files as commands: TypeScript blocks are code, sections are templates.",
   "type": "module",
   "bin": {
     "mr": "./src/cli.ts"
   },
   "exports": {
-    ".": "./src/index.ts",
-    "./register": "./src/register.js"
+    ".": "./src/index.ts"
   },
   "scripts": {
     "test": "bun test",

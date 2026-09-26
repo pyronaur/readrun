@@ -1,6 +1,0 @@
-# Register Markrun before Bun loads the entrypoint.
-preload = ["./src/register.js"]
-
-# Recognize .mr as an executable source extension; the plugin replaces its contents.
-[loader]
-".mr" = "ts"

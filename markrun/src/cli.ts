@@ -7,11 +7,11 @@ import { Markrun, MarkrunError } from "./index.ts";
 const help = `Markrun 0.1 — executable Markdown
 
 Usage:
-  mr file.mr [arguments...]                Execute from any directory
-  mr --check file.mr                       Syntax-check without executing
-  mr --list file.mr                        List section names
+  mr file.md [arguments...]                Execute from any directory
+  mr --check file.md                       Syntax-check without executing
+  mr --list file.md                        List section names
 
-Only run .mr files you trust: executable fences have full runtime access.`;
+Only run Markdown files you trust: executable fences have full runtime access.`;
 
 export async function main(argv = process.argv.slice(2)): Promise<void> {
   if (argv[0] === "--help" || argv[0] === "-h") {

@@ -26,7 +26,7 @@ test('CLI help works without executing a file', () => {
 });
 
 test('CLI --list names every section without running the entry', () => {
-  const result = cli(['--list', 'example.mr']);
+  const result = cli(['--list', 'example.md']);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /^Run\tline 14$/m);
   assert.match(result.stdout, /^Last Section\tline 29$/m);
@@ -34,15 +34,15 @@ test('CLI --list names every section without running the entry', () => {
 });
 
 test('CLI --check validates the example without evaluating Bun-specific code', () => {
-  const result = cli(['--check', 'example.mr']);
+  const result = cli(['--check', 'example.md']);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /OK: example.mr \(3 sections\)/);
+  assert.match(result.stdout, /OK: example.md \(3 sections\)/);
 });
 
 test('CLI normalizes argv and passes user arguments', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'markrun-cli-'));
   try {
-    const filename = join(directory, 'args.mr');
+    const filename = join(directory, 'args.md');
     await writeFile(filename, '```ts\nconsole.log(process.argv.slice(2).join("|"));\n```');
     const result = cli([filename, 'one', '--two']);
     assert.equal(result.status, 0, result.stderr);
@@ -53,16 +53,28 @@ test('CLI normalizes argv and passes user arguments', async () => {
 test('CLI returns nonzero and useful diagnostics on execution failure', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'markrun-failure-'));
   try {
-    const filename = join(directory, 'bad.mr');
+    const filename = join(directory, 'bad.md');
     await writeFile(filename, '```ts\nthrow new Error("intentional failure")\n```');
     const result = cli([filename]);
     assert.equal(result.status, 1);
-    assert.match(result.stderr, /\[EXECUTION\].*bad.mr:2:.*intentional failure/);
+    assert.match(result.stderr, /\[EXECUTION\].*bad.md:2:.*intentional failure/);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 test('CLI fails for a missing file', () => {
-  const result = cli(['does-not-exist.mr']);
+  const result = cli(['does-not-exist.md']);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /ENOENT/);
+});
+
+test('README.md runs: the introduction lists chapters, and every chapter renders', { skip: bun ? false : 'README.md uses Bun.argv; it needs the real Bun runtime.' }, () => {
+  const intro = cli(['README.md']);
+  assert.equal(intro.status, 0, intro.stderr);
+  const chapters = [...intro.stdout.matchAll(/^- `([a-z]+)`:/gm)].map(match => match[1]);
+  assert.ok(chapters.length >= 10, intro.stdout);
+  for (const chapter of chapters) {
+    const result = cli(['README.md', chapter]);
+    assert.equal(result.status, 0, `${chapter}: ${result.stderr}`);
+  }
+  assert.match(cli(['README.md', 'values']).stdout, /> Hello Ada, this line was filled in by Markrun\./);
 });

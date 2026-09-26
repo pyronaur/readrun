@@ -38,10 +38,36 @@ test("entry text prints in place, between code output", async () => {
   assert.deepEqual(output, [['# Hello\n'], ['from code'], ['\nBye']]);
 });
 
+test("blank lines around a block that printed nothing do not double up", async () => {
+  const { runtime, output } = capture(doc('Top', '', fence('const quiet = 1;'), '', 'Bottom', '', fence('console.log("loud")'), '', 'End'));
+  await runtime.run();
+  assert.deepEqual(output, [['Top\n'], ['Bottom\n'], ['loud'], ['\nEnd']]);
+});
+
 test("HTML comments are notes: never executed and never printed", async () => {
   const { runtime, output } = capture(doc('<!-- A note -->', fence('console.log("right")'), '<!--', fence('console.log("wrong")'), '-->', 'text'));
   await runtime.run();
   assert.deepEqual(output, [['right'], ['text']]);
+});
+
+test("frontmatter is information about the file: never executed, never printed", async () => {
+  const { runtime, output } = capture(doc('---', 'title: Hello', '---', '# Heading', fence('console.log("ran")')));
+  await runtime.run();
+  assert.deepEqual(output, [['# Heading'], ['ran']]);
+});
+
+test("frontmatter can end with ..., and an unclosed --- on the first line is ordinary text", async () => {
+  const closed = capture(doc('---', 'a: 1', '...', 'text'));
+  await closed.runtime.run();
+  assert.deepEqual(closed.output, [['text']]);
+  const open = capture(doc('---', 'text'));
+  await open.runtime.run();
+  assert.deepEqual(open.output, [['---\ntext']]);
+});
+
+test("placeholders inside inline code and fenced blocks are printed as written", async () => {
+  const runtime = new Markrun(doc(marker('A'), 'Hi {{ name }}, write `{{ name }}` or ``{{ x }}``.', '```text', '{{ y }}', '```', '~~~', '{{ z }}', '~~~'));
+  assert.equal(await runtime.pull('A', { name: 'Ada' }), 'Hi Ada, write `{{ name }}` or ``{{ x }}``.\n```text\n{{ y }}\n```\n~~~\n{{ z }}\n~~~');
 });
 
 test("without markers, --- and headings are ordinary text", async () => {
@@ -106,7 +132,7 @@ test("an object can be passed as is; its keys become the section's names", async
 });
 
 test("a missing value is an error that names the section and placeholder", async () => {
-  const runtime = new Markrun(doc(marker('A'), 'Hi {{ name }}'), { filename: '/tmp/missing.mr' });
+  const runtime = new Markrun(doc(marker('A'), 'Hi {{ name }}'), { filename: '/tmp/missing.md' });
   await assert.rejects(() => runtime.pull('A'), (error: unknown) => error instanceof MarkrunError && error.code === 'VALUE' && error.line === 2 && /"A" needs a value for \{\{ name \}\}/.test(error.message));
 });
 
@@ -237,12 +263,12 @@ test("failed pulls do not block later pulls", async () => {
 });
 
 test("runtime errors identify the executing fence's source line", async () => {
-  const runtime = new Markrun(doc(marker('Broken'), fence('const n = 1'), 'text', fence('throw new Error("boom")')), { filename: '/tmp/source.mr' });
+  const runtime = new Markrun(doc(marker('Broken'), fence('const n = 1'), 'text', fence('throw new Error("boom")')), { filename: '/tmp/source.md' });
   await assert.rejects(() => runtime.pull('Broken'), (error: unknown) => error instanceof MarkrunError && error.code === 'EXECUTION' && error.line === 7 && error.cause instanceof Error);
 });
 
 test("parser diagnostics identify the original Markdown line", async () => {
-  const runtime = new Markrun(doc('intro', 'more prose', fence('const = ;')), { filename: '/tmp/syntax.mr' });
+  const runtime = new Markrun(doc('intro', 'more prose', fence('const = ;')), { filename: '/tmp/syntax.md' });
   await assert.rejects(() => runtime.run(), (error: unknown) => error instanceof MarkrunError && error.code === 'SYNTAX' && error.line === 4);
 });
 
@@ -315,7 +341,7 @@ test("shorter backticks inside a wider display fence do not close it", async () 
 });
 
 test("unclosed fences report their opening line", () => {
-  assert.throws(() => new Markrun('intro\n```ts\nx()', { filename: '/tmp/broken.mr' }), (error: unknown) => error instanceof MarkrunError && error.code === 'FENCE' && error.line === 2);
+  assert.throws(() => new Markrun('intro\n```ts\nx()', { filename: '/tmp/broken.md' }), (error: unknown) => error instanceof MarkrunError && error.code === 'FENCE' && error.line === 2);
 });
 
 test("BOM and CRLF input are normalized", async () => {
@@ -347,14 +373,14 @@ test("unused invalid code is lazy, while check diagnoses it", async () => {
   assert.throws(() => runtime.check(), errorCode('SYNTAX'));
 });
 
-test("static imports execute locally and dynamic imports resolve from the .mr file", async () => {
+test("static imports execute locally and dynamic imports resolve from the .md file", async () => {
   const directory = await mkdtemp(join(tmpdir(), 'markrun-import-'));
   try {
     await writeFile(join(directory, 'helper.mjs'), 'export const answer = 42;');
-    const { runtime, output } = capture(doc(fence('import { basename } from "node:path"; const { answer } = await import("./helper.mjs"); console.log(answer, basename(import.meta.filename));'), marker('Local'), fence('import { basename } from "node:path"; console.log(basename(__filename));')), { filename: join(directory, 'example.mr') });
+    const { runtime, output } = capture(doc(fence('import { basename } from "node:path"; const { answer } = await import("./helper.mjs"); console.log(answer, basename(import.meta.filename));'), marker('Local'), fence('import { basename } from "node:path"; console.log(basename(__filename));')), { filename: join(directory, 'example.md') });
     await runtime.run();
-    assert.equal(await runtime.pull('Local'), 'example.mr');
-    assert.deepEqual(output, [[42, 'example.mr']]);
+    assert.equal(await runtime.pull('Local'), 'example.md');
+    assert.deepEqual(output, [[42, 'example.md']]);
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
@@ -362,7 +388,7 @@ test("static relative imports are resolved from the source document", async () =
   const directory = await mkdtemp(join(tmpdir(), 'markrun-require-'));
   try {
     await writeFile(join(directory, 'helper.cjs'), 'exports.answer = 42;');
-    const { runtime, output } = capture(fence('import { answer } from "./helper.cjs"; console.log(answer);'), { filename: join(directory, 'test.mr') });
+    const { runtime, output } = capture(fence('import { answer } from "./helper.cjs"; console.log(answer);'), { filename: join(directory, 'test.md') });
     await runtime.run();
     assert.deepEqual(output, [[42]]);
   } finally { await rm(directory, { recursive: true, force: true }); }
@@ -374,10 +400,10 @@ test("the internal context binding cannot collide with user identifiers", async 
   assert.deepEqual(output, [[3, 'a']]);
 });
 
-test("runFile reads and runs a real .mr file", async () => {
+test("runFile reads and runs a real .md file", async () => {
   const directory = await mkdtemp(join(tmpdir(), 'markrun-file-'));
   try {
-    const filename = join(directory, 'file.mr');
+    const filename = join(directory, 'file.md');
     await writeFile(filename, doc(fence('$: a = "A"; console.log(a);'), marker('A'), 'a text'));
     const output: unknown[][] = [];
     const runtime = await runFile(filename, { console: { log: (...args: unknown[]) => { output.push(args); } } });
@@ -387,7 +413,7 @@ test("runFile reads and runs a real .mr file", async () => {
 });
 
 test("the example works with and without arguments", async () => {
-  const filename = fileURLToPath(new URL('../example.mr', import.meta.url));
+  const filename = fileURLToPath(new URL('../example.md', import.meta.url));
   const source = await readFile(filename, 'utf8');
   for (const args of [[], ['hello', 'world']]) {
     const { runtime, output } = capture(source, { filename, args, globals: { Bun: { argv: ['/bin/bun', filename, ...args] } } });

@@ -17,7 +17,7 @@ And it uses {{ arguments }}
 
 ```ts
 console.log("Only if arguments were passed");
-````
+```
 
 <!--$: Always -->
 We can have multiple md blocks like this

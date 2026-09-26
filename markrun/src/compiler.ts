@@ -38,7 +38,7 @@ function typescript(): typeof TS {
 /** A passed value becomes a variable only when its key is a usable identifier. */
 export const isVariableName = (name: string): boolean => /^[A-Za-z_$][\w$]*$/.test(name) && !reserved.has(name);
 
-/** Blank out prose rather than concatenate code: parser diagnostics retain .mr line numbers. */
+/** Blank out prose rather than concatenate code: parser diagnostics retain .md line numbers. */
 function regionSource(document: ParsedDocument, region: Region, internal: string, values: string[]): string {
   const lines = Array<string>(document.lineCount).fill("");
   for (const token of region.tokens) {
@@ -165,7 +165,7 @@ function transpile(document: ParsedDocument, region: Region, internal: string, v
         ));
       }
       if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-        // Resolve dynamic imports relative to the .mr file, not this interpreter module.
+        // Resolve dynamic imports relative to the .md file, not this interpreter module.
         return factory.createCallExpression(member("importModule"), undefined, node.arguments.map(arg => ts.visitNode(arg, visit) as TS.Expression));
       }
       if (ts.isMetaProperty(node) && node.keywordToken === ts.SyntaxKind.ImportKeyword) return member("meta");

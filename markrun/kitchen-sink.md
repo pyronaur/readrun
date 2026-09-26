@@ -55,7 +55,7 @@ if (flags.json) {
 ```
 
 <!--$: Help -->
-Usage: mr kitchen-sink.mr [options] <pokemon...>
+Usage: mr kitchen-sink.md [options] <pokemon...>
 
 Looks up Pokémon by name or number. Names can also be piped in, one per line.
 

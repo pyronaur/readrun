@@ -25,21 +25,35 @@ export interface MarkrunOptions {
   exit?: (code: number) => void;
 }
 
-/** What `import { ... } from 'markrun'` gives a .mr file. */
+/** What `import { ... } from 'markrun'` gives a .md file. */
 export interface MarkrunModule {
   route(name: string, flags: readonly string[]): Promise<void>;
 }
 
-/** Inside a pulled section, printing appends to the section's output instead of stdout. */
-function capturingConsole(target: ConsoleLike | Console, output: string[]): ConsoleLike {
-  const captured = new Set(["log", "info", "debug"]);
-  return new Proxy(target, {
+/**
+ * Where a render's text and printed output go, in file order. Inside a pulled section, printing is
+ * collected instead of written. Blank lines around a block that printed nothing never double up.
+ */
+function printer(target: ConsoleLike | Console, collect?: string[]) {
+  const printing = new Set(["log", "info", "debug"]);
+  let endsBlank = false;
+  const write = (value: string) => { if (collect) collect.push(value); else target.log(value); };
+  const console = new Proxy(target, {
     get(object, key) {
-      if (captured.has(String(key))) return (...args: unknown[]) => { output.push(format(...args)); };
       const value = Reflect.get(object, key, object);
-      return typeof value === "function" ? value.bind(object) : value;
+      if (!printing.has(String(key))) return typeof value === "function" ? value.bind(object) : value;
+      return (...args: unknown[]) => {
+        endsBlank = false;
+        if (collect) collect.push(format(...args)); else Reflect.apply(value as Function, object, args);
+      };
     },
   }) as ConsoleLike;
+  const text = (value: string) => {
+    if (endsBlank) value = value.replace(/^(?:[ \t]*\n)+/, "");
+    endsBlank = /\n[ \t]*$/.test(value);
+    write(value);
+  };
+  return { console, text };
 }
 
 /** `-h` also matches combined short flags such as `-vh`. Arguments after `--` never match. */
@@ -65,7 +79,7 @@ export class Markrun {
 
   constructor(source: string, options: MarkrunOptions = {}) {
     this.#options = { ...options, globals: { ...options.globals } };
-    this.document = parse(source, resolve(options.filename ?? "document.mr"));
+    this.document = parse(source, resolve(options.filename ?? "document.md"));
     this.args = Object.freeze([...(options.args ?? process.argv.slice(2))]);
     this.#require = createRequire(this.document.filename);
     this.#console = options.console ?? console;
@@ -100,19 +114,19 @@ export class Markrun {
     }) as NodeJS.Require;
   }
 
-  #context(region: Region, values: Record<string, unknown>, output: ConsoleLike | Console, text: (value: string) => void, chain: Region[]) {
+  #context(region: Region, values: Record<string, unknown>, output: ReturnType<typeof printer>, chain: Region[]) {
     const filename = this.document.filename;
     const location = { line: region.line };
     const module = { exports: {} };
     const context: ExecutionContext = {
-      console: output, values,
+      console: output.console, values,
       filename, dirname: dirname(filename), require: this.#requireFor(), module,
       globals: this.#options.globals ?? {},
       meta: { url: pathToFileURL(filename).href, filename, dirname: dirname(filename), main: true, resolve: (name: string) => this.#resolveImport(name) },
       at: line => { location.line = line; },
       text: index => {
         const chunk = region.chunks[index];
-        text(interpolate(chunk.text, values, region.name, filename, chunk.line));
+        output.text(interpolate(chunk.text, values, region.name, filename, chunk.line));
       },
       pull: (name, passed) => this.#pull(name, passed, chain),
       importModule: (specifier, options) => specifier === "markrun" ? Promise.resolve(this.#module) : import(this.#resolveImport(specifier), options),
@@ -155,7 +169,7 @@ export class Markrun {
     const values = { ...(passed as Record<string, unknown> | undefined) };
     const program = this.#program(region, this.#variables(region, values));
     const output: string[] = [];
-    const { context, location } = this.#context(region, values, capturingConsole(this.#console, output), text => output.push(text), [...chain, region]);
+    const { context, location } = this.#context(region, values, printer(this.#console, output), [...chain, region]);
     try {
       await program(context);
     } catch (cause) {
@@ -183,7 +197,7 @@ export class Markrun {
     const region = this.document.entry;
     try {
       const program = this.#program(region, []);
-      const { context, location } = this.#context(region, {}, this.#console, text => this.#console.log(text), [region]);
+      const { context, location } = this.#context(region, {}, printer(this.#console), [region]);
       try {
         await program(context);
       } catch (cause) {
