@@ -14,6 +14,6 @@ if (/\brm\s+-[a-z]*(r[a-z]*f|f[a-z]*r)/.test(command)) {
 ```
 
 <!--$: Denied -->
-Blocked this command: {{ command }}
+Blocked `{{ command }}`.
 
 Recursive deletes need a human. Ask the user to run it, or delete specific files instead.

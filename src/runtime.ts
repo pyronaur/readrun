@@ -126,7 +126,7 @@ export class Markrun {
       at: line => { location.line = line; },
       text: index => {
         const chunk = region.chunks[index];
-        output.text(interpolate(chunk.text, values, region.name, filename, chunk.line));
+        output.text(interpolate(chunk.text, values));
       },
       render: (name, passed) => this.#render(name, passed, chain),
       importModule: (specifier, options) => specifier === "markrun" ? Promise.resolve(this.#module) : import(this.#resolveImport(specifier), options),

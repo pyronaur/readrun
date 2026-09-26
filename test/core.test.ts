@@ -65,9 +65,9 @@ test("frontmatter can end with ..., and an unclosed --- on the first line is ord
   assert.deepEqual(open.output, [['---\ntext']]);
 });
 
-test("placeholders inside inline code and fenced blocks are printed as written", async () => {
-  const runtime = new Markrun(doc(marker('A'), 'Hi {{ name }}, write `{{ name }}` or ``{{ x }}``.', '```text', '{{ y }}', '```', '~~~', '{{ z }}', '~~~'));
-  assert.equal(await runtime.render('A', { name: 'Ada' }), 'Hi Ada, write `{{ name }}` or ``{{ x }}``.\n```text\n{{ y }}\n```\n~~~\n{{ z }}\n~~~');
+test("backticks and code blocks make no difference to placeholders", async () => {
+  const runtime = new Markrun(doc(marker('A'), 'Hi {{ name }}, `{{ name }}`', '```text', '{{ name }}', '```'));
+  assert.equal(await runtime.render('A', { name: 'Ada' }), 'Hi Ada, `Ada`\n```text\nAda\n```');
 });
 
 test("without markers, --- and headings are ordinary text", async () => {
@@ -77,9 +77,10 @@ test("without markers, --- and headings are ordinary text", async () => {
   assert.equal(runtime.document.sections.length, 0);
 });
 
-test("the entry gets no values, so a placeholder there is an error", async () => {
-  const { runtime } = capture('Hello {{ name }}');
-  await assert.rejects(() => runtime.run(), errorCode('VALUE', /entry gets no values/));
+test("placeholders in the entry are printed as written, since it gets no values", async () => {
+  const { runtime, output } = capture('Hello {{ name }}');
+  await runtime.run();
+  assert.deepEqual(output, [['Hello {{ name }}']]);
 });
 
 test("entry fences share lexical scope and TypeScript types are erased", async () => {
@@ -131,9 +132,9 @@ test("an object can be passed as is; its keys become the section's names", async
   assert.deepEqual(output, [['- a and b']]);
 });
 
-test("a missing value is an error that names the section and placeholder", async () => {
-  const runtime = new Markrun(doc(marker('A'), 'Hi {{ name }}'), { filename: '/tmp/missing.md' });
-  await assert.rejects(() => runtime.render('A'), (error: unknown) => error instanceof MarkrunError && error.code === 'VALUE' && error.line === 2 && /"A" needs a value for \{\{ name \}\}/.test(error.message));
+test("a placeholder without a value is printed as written", async () => {
+  const runtime = new Markrun(doc(marker('A'), 'Hi {{ name }}, `{{ missing }}` {{ also.missing }}'));
+  assert.equal(await runtime.render('A', { name: 'Ada' }), 'Hi Ada, `{{ missing }}` {{ also.missing }}');
 });
 
 test("values must be an object", async () => {
@@ -158,7 +159,7 @@ test("placeholders follow own-property paths, and preserve false and zero", asyn
 
 test("prototype properties are never reachable from placeholders", async () => {
   const runtime = new Markrun(doc(marker('A'), '{{ obj.inherited }}'));
-  await assert.rejects(() => runtime.render('A', { obj: Object.create({ inherited: 'secret' }) }), errorCode('VALUE'));
+  assert.equal(await runtime.render('A', { obj: Object.create({ inherited: 'secret' }) }), '{{ obj.inherited }}');
 });
 
 test("values are data, never executable source", async () => {

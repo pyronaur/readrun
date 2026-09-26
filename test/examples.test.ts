@@ -88,7 +88,7 @@ test('hook.md: denies recursive deletes as JSON and allows everything else', opt
   const denied = await example('hook.md', [], '{"tool_input":{"command":"rm -rf build"}}');
   const output = JSON.parse(denied.stdout).hookSpecificOutput;
   assert.equal(output.permissionDecision, 'deny');
-  assert.match(output.permissionDecisionReason, /^Blocked this command: rm -rf build\n/);
+  assert.match(output.permissionDecisionReason, /^Blocked `rm -rf build`\.\n/);
   const allowed = await example('hook.md', [], '{"tool_input":{"command":"ls"}}');
   assert.equal(allowed.stdout, '');
   assert.equal(allowed.status, 0);

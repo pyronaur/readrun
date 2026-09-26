@@ -125,7 +125,7 @@ A Markrun file is plain Markdown. These are the only things that mean something 
 | Everything before the first marker | The entry. `mr file.md` runs it. |
 | `<!--$: Name -->` on its own line, outside a fence | Starts a section named `Name`. It runs until the next marker. |
 | `$: md = 'Name'` / `$: md = 'Name', { values }` | Render the section now and declare `const md`, a string with its output. |
-| `{{ key }}` | Filled from the values passed where the section is rendered. A missing value is an error. |
+| `{{ key }}` | Filled from the values passed where the section is rendered. Without a value, it is printed as written. |
 | Any other full-line `<!-- … -->` comment, and frontmatter | Notes. Never executed, never printed. |
 | `import { route } from 'markrun'` | `await route('Help', ['-h', '--help'])` prints a section and exits when a flag is passed. |
 
@@ -165,8 +165,8 @@ $: line = 'Line', item;                // item's keys become the section's names
 Inside a section, passed values are `const` variables in its code and fill its placeholders. Nothing else does: a section's own variables never reach its text, and the entry gets no values at all. To trace a `{{ name }}`, find where the section is rendered.
 
 - Values must be an object. Keys that aren't valid variable names (such as `first-name` or `arguments`) still fill placeholders but are not variables. A value may not reuse a name the section declares itself.
-- `{{ user.name }}` follows own properties only. `0` and `false` render as text, `null` renders as nothing, and `undefined` or a missing value is an error naming the section and the placeholder.
-- Placeholders inside inline code or fenced blocks are printed as written, the way Markdown treats code.
+- `{{ user.name }}` follows own properties only. `0` and `false` render as text, `null` renders as nothing, and a placeholder without a value is printed as written.
+- Placeholders are filled everywhere in the text, including inside backticks and code blocks.
 - Values are not Markdown-escaped, and they are never executed.
 - Every render runs the section again with fresh variables. Each section has its own scope, separate from its caller.
 
@@ -239,7 +239,7 @@ if (/\brm\s+-[a-z]*r[a-z]*f/.test(command)) {
 ```
 
 <!--$: Denied -->
-Blocked this command: {{ command }}. Ask the user to run it, or delete specific files instead.
+Blocked `{{ command }}`. Ask the user to run it, or delete specific files instead.
 ~~~
 
 - For hooks that answer in JSON, keep the entry free of text and put notes in comments: stdout must be only the JSON object.
