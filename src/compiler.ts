@@ -16,6 +16,7 @@ export interface ExecutionContext {
   at(line: number): void;
   text(index: number): void;
   render(name: unknown, values?: unknown): Promise<string>;
+  all(renders: Promise<string>[]): Promise<string[]>;
   importModule(specifier: string, options?: ImportCallOptions): Promise<unknown>;
 }
 
@@ -79,25 +80,34 @@ export function declaredNames(document: ParsedDocument, region: Region): Set<str
       if (bindings && ts.isNamespaceImport(bindings)) names.add(bindings.name.text);
       else if (bindings) for (const element of bindings.elements) names.add(element.name.text);
     } else if (ts.isLabeledStatement(statement) && statement.label.text === "$") {
-      const statementParts = renderParts(statement);
-      if (statementParts) names.add(statementParts.target.text);
+      for (const line of renderLines(statement) ?? []) names.add(line.target.text);
     }
   }
   writeCache(key, [...names]);
   return names;
 }
 
-/** `$: target = name` or `$: target = name, values`. */
-function renderParts(node: TS.LabeledStatement): { target: TS.Identifier; name: TS.Expression; values?: TS.Expression } | undefined {
+interface RenderLine { statement: TS.Statement; target: TS.Identifier; name: TS.Expression; values?: TS.Expression }
+
+/** `target = name` or `target = name, values`. */
+function renderParts(statement: TS.Statement): RenderLine | undefined {
   const ts = typescript();
-  let expression = ts.isExpressionStatement(node.statement) ? node.statement.expression : undefined;
+  let expression = ts.isExpressionStatement(statement) ? statement.expression : undefined;
   let values: TS.Expression | undefined;
   if (expression && ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.CommaToken) {
     values = expression.right;
     expression = expression.left;
   }
   if (!expression || !ts.isBinaryExpression(expression) || expression.operatorToken.kind !== ts.SyntaxKind.EqualsToken || !ts.isIdentifier(expression.left)) return undefined;
-  return { target: expression.left, name: expression.right, values };
+  return { statement, target: expression.left, name: expression.right, values };
+}
+
+/** `$: line` renders one section; `$: { line; line }` renders several at the same time. Undefined when any line isn't a render. */
+function renderLines(node: TS.LabeledStatement): RenderLine[] | undefined {
+  const ts = typescript();
+  const statements = ts.isBlock(node.statement) ? [...node.statement.statements] : [node.statement];
+  const lines = statements.map(renderParts);
+  return lines.length && lines.every(line => line) ? lines as RenderLine[] : undefined;
 }
 
 /** Compile an entire region at once so bindings survive between its fences. Every region is async. */
@@ -143,11 +153,35 @@ function transpile(document: ParsedDocument, region: Region, internal: string, v
     function visit(node: TS.Node): TS.VisitResult<TS.Node> {
       if (ts.isTypeNode(node)) return node;
       // `$: md = 'Section', values` becomes `const md = await render('Section', values)`.
+      // `$: { a = 'A'; b = 'B' }` becomes `const [a, b] = await Promise.all([render('A'), render('B')])`.
       if (ts.isLabeledStatement(node) && node.label.text === "$") {
-        const line = node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1;
-        const parts = renderParts(node);
-        if (!parts) {
-          throw new MarkrunError("RENDER", "A $: render must assign a section to a name, as in $: md = 'Section' or $: md = 'Section', { values }.", document.filename, line);
+        const lineOf = (item: TS.Node) => item.getSourceFile().getLineAndCharacterOfPosition(item.getStart()).line + 1;
+        const line = lineOf(node);
+        const parallel = ts.isBlock(node.statement);
+        const lines = renderLines(node);
+        if (!lines) {
+          const statements = parallel ? [...(node.statement as TS.Block).statements] : [];
+          const bad = statements.find(statement => !renderParts(statement));
+          if (parallel && !bad) throw new MarkrunError("RENDER", "A $: { } block needs at least one render inside.", document.filename, line);
+          throw new MarkrunError("RENDER", parallel
+            ? "Each line in a $: { } block must render a section, as in a = 'Section', { values };"
+            : "A $: render must assign a section to a name, as in $: md = 'Section' or $: md = 'Section', { values }.", document.filename, bad ? lineOf(bad) : line);
+        }
+        // Lines in a block run at the same time, so none of them can use another's result.
+        const targets = new Map(lines.map(item => [item.target.text, item]));
+        if (targets.size < lines.length) {
+          const repeated = lines.find((item, index) => lines.findIndex(other => other.target.text === item.target.text) !== index)!;
+          throw new MarkrunError("RENDER", `${repeated.target.text} is assigned twice in the same $: { } block.`, document.filename, lineOf(repeated.statement));
+        }
+        const uses = (expression: TS.Node): string | undefined => {
+          if (ts.isIdentifier(expression) && targets.has(expression.text)
+            && !(ts.isPropertyAccessExpression(expression.parent) && expression.parent.name === expression)
+            && !(ts.isPropertyAssignment(expression.parent) && expression.parent.name === expression)) return expression.text;
+          return ts.forEachChild(expression, uses);
+        };
+        if (parallel) for (const item of lines) {
+          const used = [item.name, item.values].map(part => part && uses(part)).find(Boolean);
+          if (used) throw new MarkrunError("RENDER", `${item.target.text} can't use ${used}: lines in a $: { } block render at the same time. Move it after the block.`, document.filename, lineOf(item.statement));
         }
         if (!ts.isBlock(node.parent) && !ts.isSourceFile(node.parent) && !ts.isCaseOrDefaultClause(node.parent)) {
           throw new MarkrunError("RENDER", "A $: render declares a variable, so it needs its own block. Wrap it in { }.", document.filename, line);
@@ -158,11 +192,14 @@ function transpile(document: ParsedDocument, region: Region, internal: string, v
         if (owner && !ts.getModifiers(owner as TS.HasModifiers)?.some(modifier => modifier.kind === ts.SyntaxKind.AsyncKeyword)) {
           throw new MarkrunError("RENDER", "A $: render waits for the section, so the function around it must be async.", document.filename, line);
         }
-        const args = [parts.name, ...(parts.values ? [parts.values] : [])].map(arg => ts.visitNode(arg, visit) as TS.Expression);
-        const call = factory.createAwaitExpression(factory.createCallExpression(member("render"), undefined, args));
-        return factory.createVariableStatement(undefined, factory.createVariableDeclarationList(
-          [factory.createVariableDeclaration(parts.target.text, undefined, undefined, call)], ts.NodeFlags.Const,
-        ));
+        const calls = lines.map(item => factory.createCallExpression(member("render"), undefined,
+          [item.name, ...(item.values ? [item.values] : [])].map(arg => ts.visitNode(arg, visit) as TS.Expression)));
+        const declaration = parallel
+          ? factory.createVariableDeclaration(
+            factory.createArrayBindingPattern(lines.map(item => factory.createBindingElement(undefined, undefined, item.target.text))), undefined, undefined,
+            factory.createAwaitExpression(factory.createCallExpression(member("all"), undefined, [factory.createArrayLiteralExpression(calls)])))
+          : factory.createVariableDeclaration(lines[0].target.text, undefined, undefined, factory.createAwaitExpression(calls[0]));
+        return factory.createVariableStatement(undefined, factory.createVariableDeclarationList([declaration], ts.NodeFlags.Const));
       }
       if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
         // Resolve dynamic imports relative to the .md file, not this interpreter module.
@@ -198,4 +235,4 @@ function transpile(document: ParsedDocument, region: Region, internal: string, v
 }
 
 /** Changes whenever the code generation changes, so a new Markrun never reuses old output. */
-const codegen = cacheKey("markrun-codegen", ...[regionSource, renderParts, declaredNames, compileRegion, transpile].map(String));
+const codegen = cacheKey("markrun-codegen", ...[regionSource, renderParts, renderLines, declaredNames, compileRegion, transpile].map(String));

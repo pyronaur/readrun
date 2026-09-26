@@ -227,6 +227,33 @@ test("$: works in async functions and callbacks", async () => {
   assert.deepEqual(output, [['a'], ['a']]);
 });
 
+test("a $: { } block renders its sections at the same time", async () => {
+  const { runtime, output } = capture(doc(
+    fence('const started = Date.now();\n$: {\n  a = "Slow", { name: "A" };\n  b = "Slow", { name: "B" };\n}\nconsole.log(a, b, Date.now() - started < 350);'),
+    marker('Slow'), fence('await new Promise(done => setTimeout(done, 200));'), '{{ name }} done'));
+  await runtime.run();
+  assert.deepEqual(output, [['A done', 'B done', true]]);
+});
+
+test("a $: { } block only holds renders that don't use each other", () => {
+  const cases: [string, RegExp][] = [
+    ['$: {}', /at least one render/],
+    ['$: {\n  a = "A";\n  console.log(1);\n}', /Each line in a \$: \{ \} block/],
+    ['$: {\n  a = "A";\n  b = "A", { value: a };\n}', /b can't use a/],
+    ['$: {\n  a = "A";\n  a = "A";\n}', /assigned twice/],
+  ];
+  for (const [code, message] of cases) {
+    const runtime = new Markrun(doc(fence(code), marker('A')));
+    assert.throws(() => runtime.check(), errorCode('RENDER', message), code);
+  }
+});
+
+test("names from a $: { } block count as the section's own names", async () => {
+  const runtime = new Markrun(doc(marker('Outer'), fence('$: {\n  inner = "Inner";\n}\nconsole.log(inner);'), marker('Inner'), 'in'));
+  assert.equal(await runtime.render('Outer'), 'in');
+  await assert.rejects(() => runtime.render('Outer', { inner: 'x' }), errorCode('VALUE', /same name/));
+});
+
 test("$: must assign a plain name, inside a block, inside an async function", () => {
   for (const code of ['$: "A";', '$: a.b = "A";', '$: a += "A";', 'if (true) $: a = "A";', 'function f() { $: a = "A"; }', '$: a = "A", {}, {};']) {
     const runtime = new Markrun(doc(fence(code), marker('A')));

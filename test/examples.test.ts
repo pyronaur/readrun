@@ -79,9 +79,9 @@ test('greeting.md: values fill the template and are variables in its code', opti
   assert.equal(result.stdout, '# Hello, Ada\nPrepared a greeting for Ada.\n', result.stderr);
 });
 
-test('await.md: sections can await', options, async () => {
+test('await.md: sections can await, and a $: { } block renders them at the same time', options, async () => {
   const result = await example('await.md');
-  assert.equal(result.stdout, 'Waited inside the section.\nRan await.md in sequence.\n', result.stderr);
+  assert.equal(result.stdout, 'Waited inside the section.\nRan await.md in sequence.\nThe first section is done. The second section is done.\nBoth took about 300 ms, not 600.\n', result.stderr);
 });
 
 test('hook.md: denies recursive deletes as JSON and allows everything else', options, async () => {

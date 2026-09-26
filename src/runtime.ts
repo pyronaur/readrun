@@ -129,6 +129,8 @@ export class Markrun {
         output.text(interpolate(chunk.text, values));
       },
       render: (name, passed) => this.#render(name, passed, chain),
+      // Not the region's own Promise, which the file could shadow.
+      all: renders => Promise.all(renders),
       importModule: (specifier, options) => specifier === "markrun" ? Promise.resolve(this.#module) : import(this.#resolveImport(specifier), options),
     };
     return { context, location };

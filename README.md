@@ -21,7 +21,7 @@ Run `mr README.md <chapter>` to read a chapter in your terminal:
 - `rules`: the whole language on one table
 - `output`: what a section prints, and in what order
 - `values`: how sections get their data (runs a live example)
-- `render`: rendering sections from code, and `await`
+- `render`: rendering sections from code, `await`, and rendering in parallel
 - `cli`: flags, stdin, stdout and exit codes
 - `hooks`: Markrun as a Claude Code hook
 - `structure`: section boundaries, scope, frontmatter and imports
@@ -102,7 +102,7 @@ The other examples each show one idea:
 | File | Shows |
 | --- | --- |
 | `examples/greeting.md` | Values filling a template and appearing as variables in its code: `mr examples/greeting.md Ada` |
-| `examples/await.md` | A section that awaits |
+| `examples/await.md` | A section that awaits, and a `$: { }` block rendering two sections at the same time |
 | `examples/hook.md` | A Claude Code hook that answers in JSON |
 | `examples/pokedex.md` | Everything together: flags, stdin, `--help` and `--version` routes, a section that fetches, sections rendering sections, JSON output, stderr and exit codes |
 
@@ -125,6 +125,7 @@ A Markrun file is plain Markdown. These are the only things that mean something 
 | Everything before the first marker | The entry. `mr file.md` runs it. |
 | `<!--$: Name -->` on its own line, outside a fence | Starts a section named `Name`. It runs until the next marker. |
 | `$: md = 'Name'` / `$: md = 'Name', { values }` | Render the section now and declare `const md`, a string with its output. |
+| `$: { a = 'A'; b = 'B', { values }; }` | Render several sections at the same time, declaring `a` and `b`. |
 | `{{ key }}` | Filled from the values passed where the section is rendered. Without a value, it is printed as written. |
 | Any other full-line `<!-- … -->` comment, and frontmatter | Notes. Never executed, never printed. |
 | `import { route } from 'markrun'` | `await route('Help', ['-h', '--help'])` prints a section and exits when a flag is passed. |
@@ -191,6 +192,20 @@ console.log(`> (${name.length} letters in "${name}")`);
 `$:` is an ordinary JavaScript label, so the file stays valid TypeScript. Only statements labeled `$` render sections; strings, comments, templates and other labels are left alone. The name can be any expression, for example `$: md = name`.
 
 Every region can `await`, including sections. A render waits for the section, so the compiler adds the `await` itself. A `$:` statement must sit directly in a block (`if (x) $: md = 'Run'` needs braces), because it becomes a `const` declaration, and inside a function that function must be `async`.
+
+Each `$:` line waits for its section before the next line starts. To render several sections at the same time, put the lines in a `$: { }` block:
+
+```ts
+$: {
+  a = 'Slow', { name: 'A' };
+  b = 'Slow', { name: 'B' };
+}
+console.log(a, b);   // both ready here
+```
+
+- Only render lines go inside the block, and each one declares its name, as with single lines.
+- The lines run at the same time, so none of them can use another's result. Use it after the block.
+- Under the hood it is `const [a, b] = await Promise.all([render('Slow', …), render('Slow', …)])`.
 
 <!--$: cli -->
 ## Flags, stdin and stdout
