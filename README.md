@@ -39,6 +39,7 @@ Run `rr README.md <chapter>` to read a chapter in your terminal:
 - `render`: rendering sections from code, `await`, and rendering in parallel
 - `cli`: flags, stdin, stdout and exit codes
 - `hooks`: Readrun as a Claude Code hook
+- `agents`: a skill that teaches coding agents to write Readrun files
 - `structure`: section boundaries, scope, frontmatter and imports
 - `cache`: the compilation cache
 - `embedding`: using Readrun from TypeScript
@@ -285,6 +286,19 @@ Blocked `{{ command }}`. Ask the user to run it, or delete specific files instea
 - A hook reads files next to itself through `__dirname`, for example `join(__dirname, 'protected.txt')`, since hooks run from the project's directory.
 - Point the hook at the full path of `readrun`, for example `"$HOME/.local/bin/readrun" "$CLAUDE_PROJECT_DIR/.claude/hooks/guard.md"`. Hooks may not see your shell's `PATH`.
 
+<!--$: agents -->
+## A skill for coding agents
+
+`skills/readrun/` is an [Agent Skill](https://agentskills.io) that teaches coding agents such as Claude Code to write, run and fix Readrun files: command-line tools, hooks and prompt templates. `SKILL.md` covers the essentials, and the agent reads the references it needs for the task at hand.
+
+To install it for Claude Code, copy or link the folder into your skills:
+
+```sh
+ln -s "$PWD/skills/readrun" ~/.claude/skills/readrun
+```
+
+It is invoked explicitly, with `/readrun`. To let the agent use it on its own, remove `disable-model-invocation: true` from `SKILL.md`.
+
 <!--$: structure -->
 ## Structure
 
@@ -337,6 +351,7 @@ src/runtime.ts      Rendering, route() and cycle detection
 src/cli.ts          The readrun command: run, --check and --list
 src/index.ts        Public API
 examples/           Example programs, from basics.md to pokedex.md
+skills/readrun/     The skill for coding agents
 test/               Core, CLI and example tests
 ```
 
