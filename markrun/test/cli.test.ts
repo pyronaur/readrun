@@ -28,8 +28,8 @@ test('CLI help works without executing a file', () => {
 test('CLI --list names every section without running the entry', () => {
   const result = cli(['--list', 'example.md']);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /^Run\tline 15$/m);
-  assert.match(result.stdout, /^Last Section\tline 36$/m);
+  assert.match(result.stdout, /^Run\tline 14$/m);
+  assert.match(result.stdout, /^Last Section\tline 35$/m);
   assert.doesNotMatch(result.stdout, /In addition/);
 });
 

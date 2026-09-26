@@ -56,7 +56,6 @@ bun run check                 # type-check Markrun itself
 This is `example.md`:
 
 ````markdown
-#!/usr/bin/env mr
 ```ts run
 const args = Bun.argv.slice(2);
 
@@ -98,8 +97,6 @@ Because it's rendered with console.log in the first section
 
 `mr example.md hello world` prints `Run` because arguments were passed, then `Always` and `Last Section`. `Always` is an ordinary section name, not a reserved hook.
 
-The first line, `#!/usr/bin/env mr`, lets the system run the file directly: after `chmod +x example.md`, `./example.md hello world` does the same as `mr example.md hello world`. Markrun never prints that line.
-
 `kitchen-sink.md` is a small Pokédex using every feature: flags, names from arguments or stdin, `--help` and `--version` routes, a section that awaits a `fetch`, sections rendering sections, JSON output, and stderr with exit codes. It needs internet access to reach [PokeAPI](https://pokeapi.co).
 
 ```sh
@@ -120,7 +117,7 @@ A Markrun file is plain Markdown. These are the only things that mean something 
 | `<!--$: Name -->` on its own line, outside a fence | Starts a section named `Name`. It runs until the next marker. |
 | `$: md = 'Name'` / `$: md = 'Name', { values }` | Render the section now and declare `const md`, a string with its output. |
 | `{{ key }}` | Filled from the values passed at the pull. A missing value is an error. |
-| Any other full-line `<!-- … -->` comment, frontmatter, and a `#!` first line | Notes. Never executed, never printed. |
+| Any other full-line `<!-- … -->` comment, and frontmatter | Notes. Never executed, never printed. |
 | `import { route } from 'markrun'` | `await route('Help', ['-h', '--help'])` prints a section and exits when a flag is passed. |
 
 Markers are HTML comments, so GitHub and other Markdown viewers hide them. Running code is opt-in: a plain ```` ```ts ```` block is an example that is shown, never run, so any Markdown file is safe to open with `mr`. GitHub highlights ```` ```ts run ```` by its first word and never shows the `run`.
@@ -239,7 +236,6 @@ Blocked `{{ command }}`. Ask the user to run it, or delete specific files instea
 - For hooks that answer in JSON, keep the entry free of text and put notes in comments: stdout must be only the JSON object.
 - For SessionStart and UserPromptSubmit hooks, plain stdout becomes context for Claude, so the file's own text is the context.
 - Point the hook at the full path of `mr`, for example `"$HOME/.local/bin/mr" "$CLAUDE_PROJECT_DIR/.claude/hooks/guard.md"`. Hooks may not see your shell's `PATH`.
-- With a `#!/usr/bin/env mr` first line and `chmod +x`, the file itself can be the command. That relies on `mr` being on the hook's `PATH`.
 
 <!--$: structure -->
 ## Structure

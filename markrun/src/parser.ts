@@ -1,7 +1,7 @@
 import { MarkrunError } from "./errors.ts";
 
 export interface Token {
-  kind: "text" | "comment" | "shebang" | "frontmatter" | "marker" | "code";
+  kind: "text" | "comment" | "frontmatter" | "marker" | "code";
   raw: string;
   line: number;
   endLine: number;
@@ -49,15 +49,11 @@ export function parse(source: string, filename = "document.md"): ParsedDocument 
   const tokens: Token[] = [];
   let inComment = false;
 
-  // A `#!` first line lets the system run the file directly (`./file.md`). It is never printed.
-  const start = lines[0]?.startsWith("#!") ? 1 : 0;
-  if (start) tokens.push({ kind: "shebang", raw: lines[0], line: 1, endLine: 1 });
+  // A `---` block on the first line is frontmatter: information about the file, never printed.
+  const frontmatterEnd = /^---[ \t]*$/.test(lines[0] ?? "") ? lines.findIndex((line, index) => index > 0 && /^(?:---|\.\.\.)[ \t]*$/.test(line)) : -1;
+  for (let i = 0; i <= frontmatterEnd; i++) tokens.push({ kind: "frontmatter", raw: lines[i], line: i + 1, endLine: i + 1 });
 
-  // A `---` block at the top is frontmatter: information about the file, never printed.
-  const frontmatterEnd = /^---[ \t]*$/.test(lines[start] ?? "") ? lines.findIndex((line, index) => index > start && /^(?:---|\.\.\.)[ \t]*$/.test(line)) : -1;
-  for (let i = start; i <= frontmatterEnd; i++) tokens.push({ kind: "frontmatter", raw: lines[i], line: i + 1, endLine: i + 1 });
-
-  for (let i = Math.max(start, frontmatterEnd + 1); i < lines.length; i++) {
+  for (let i = frontmatterEnd + 1; i < lines.length; i++) {
     const line = lines[i];
     const start = i;
     const marker = inComment ? null : /^ {0,3}<!--\s*\$:(.*?)-->[ \t]*$/.exec(line);
@@ -130,7 +126,7 @@ function chunksOf(tokens: Token[]): Chunk[] {
     current = [];
   };
   for (const token of tokens) {
-    if (token.kind === "comment" || token.kind === "frontmatter" || token.kind === "shebang") continue;
+    if (token.kind === "comment" || token.kind === "frontmatter") continue;
     if (token.kind === "code" && token.executable) flush();
     else current.push(token);
   }

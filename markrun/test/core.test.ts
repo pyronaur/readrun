@@ -360,12 +360,6 @@ test("only fences marked run execute; everything else is shown", async () => {
   for (const label of ['```ts\n', '```\nthrow 2', '```text', '```python', '~~~ts run', '```ts run now', '```sh run']) assert.ok(printed.includes(label), label);
 });
 
-test("a #! first line lets the system run the file, and is never printed", async () => {
-  const { runtime, output } = capture(doc('#!/usr/bin/env mr', '---', 'title: Hello', '---', 'text', fence('console.log("ran")')));
-  await runtime.run();
-  assert.deepEqual(output, [['text'], ['ran']]);
-});
-
 // Checking, imports and files
 
 test("check compiles every region but never executes code", () => {
@@ -430,7 +424,7 @@ test("the example works with and without arguments", async () => {
     assert.equal(text.includes('And it uses hello world'), args.length > 0);
     assert.equal(text.split("In addition to more than one, there's more than 1 execution too").length - 1, 1);
     assert.match(text, /## I mean, this renders nicely!\nBecause it's rendered/);
-    assert.doesNotMatch(text, /```ts run|#!/);
+    assert.doesNotMatch(text, /```ts run/);
     assert.match(text, /```ts\nconsole.log\("I am printed as code, never executed"\);\n```/);
   }
 });

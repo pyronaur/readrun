@@ -1,4 +1,3 @@
-#!/usr/bin/env mr
 <!-- Pokédex. Looks up Pokémon named on the command line, or piped in one per line. -->
 ```ts run
 import { parseArgs } from 'util';

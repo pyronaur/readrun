@@ -1,4 +1,3 @@
-#!/usr/bin/env mr
 ```ts run
 const args = Bun.argv.slice(2);
 
