@@ -4,7 +4,7 @@ import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Markrun, MarkrunError } from "./index.ts";
 
-const help = `Markrun 0.1 — executable Markdown
+const help = `Markrun: run Markdown files as commands
 
 Usage:
   mr file.md [arguments...]                Execute from any directory

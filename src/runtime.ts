@@ -6,7 +6,7 @@ import { format } from "node:util";
 import { compileRegion, declaredNames, isVariableName, parameters } from "./compiler.ts";
 import type { ExecutionContext, Program } from "./compiler.ts";
 import { MarkrunError } from "./errors.ts";
-import { interpolate } from "./markdown.ts";
+import { interpolate } from "./template.ts";
 import { parse, resolveSection } from "./parser.ts";
 import type { ParsedDocument, Region } from "./parser.ts";
 

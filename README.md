@@ -17,7 +17,7 @@ if (chapter) {
 Run `mr README.md <chapter>` to read a chapter in your terminal:
 
 - `install`: build and install the `mr` command
-- `example`: a complete program
+- `examples`: the example files, from a first program to a Pokédex
 - `rules`: the whole language on one table
 - `output`: what a section prints, and in what order
 - `values`: how sections get their data (runs a live example)
@@ -50,10 +50,10 @@ bun test                      # run the tests
 bun run check                 # type-check Markrun itself
 ```
 
-<!--$: example -->
-## A complete program
+<!--$: examples -->
+## Examples
 
-This is `example.md`:
+`examples/basics.md` is a first complete program:
 
 ````markdown
 ```ts run
@@ -95,14 +95,23 @@ console.log("I am printed as code, never executed");
 Because it's rendered with console.log in the first section
 ````
 
-`mr example.md hello world` prints `Run` because arguments were passed, then `Always` and `Last Section`. `Always` is an ordinary section name, not a reserved hook.
+`mr examples/basics.md hello world` prints `Run` because arguments were passed, then `Always` and `Last Section`. `Always` is an ordinary section name, not a reserved hook.
 
-`kitchen-sink.md` is a small Pokédex using every feature: flags, names from arguments or stdin, `--help` and `--version` routes, a section that awaits a `fetch`, sections rendering sections, JSON output, and stderr with exit codes. It needs internet access to reach [PokeAPI](https://pokeapi.co).
+The other examples each show one idea:
+
+| File | Shows |
+| --- | --- |
+| `examples/greeting.md` | Values filling a template and appearing as variables in its code: `mr examples/greeting.md Ada` |
+| `examples/await.md` | A section that awaits |
+| `examples/hook.md` | A Claude Code hook that answers in JSON |
+| `examples/pokedex.md` | Everything together: flags, stdin, `--help` and `--version` routes, a section that fetches, sections rendering sections, JSON output, stderr and exit codes |
+
+The Pokédex needs internet access to reach [PokeAPI](https://pokeapi.co):
 
 ```sh
-mr kitchen-sink.md pikachu bulbasaur
-echo eevee | mr kitchen-sink.md --json | jq '.[0].types'
-mr kitchen-sink.md --help
+mr examples/pokedex.md pikachu bulbasaur
+echo eevee | mr examples/pokedex.md --json | jq '.[0].types'
+mr examples/pokedex.md --help
 ```
 
 <!--$: rules -->
@@ -230,7 +239,7 @@ if (/\brm\s+-[a-z]*r[a-z]*f/.test(command)) {
 ```
 
 <!--$: Denied -->
-Blocked `{{ command }}`. Ask the user to run it, or delete specific files instead.
+Blocked this command: {{ command }}. Ask the user to run it, or delete specific files instead.
 ~~~
 
 - For hooks that answer in JSON, keep the entry free of text and put notes in comments: stdout must be only the JSON object.
@@ -272,7 +281,7 @@ runtime.check();                                         // syntax only; no exec
 await runtime.run();                                     // run the entry, printing as it goes
 const text = await runtime.render('Run', { arguments: 'hello' });
 
-await runFile('./example.md');                           // or read a file and run its entry
+await runFile('./examples/basics.md');                   // or read a file and run its entry
 ```
 
 `runFile()` does not rewrite the host process's argument vector; the CLI makes `process.argv` and `Bun.argv` match a direct run. `route()` calls the `exit` option, which defaults to `process.exit`. Runtime failures name the section and the starting line of the running block, with the original exception kept as `cause`.
@@ -284,16 +293,14 @@ await runFile('./example.md');                           // or read a file and r
 src/parser.ts       Markdown structure, section markers, frontmatter and name resolution
 src/compiler.ts     TypeScript AST rewriting and region compilation
 src/cache.ts        Compilation cache
-src/markdown.ts     Placeholder interpolation
+src/template.ts     Placeholder interpolation
 src/runtime.ts      Rendering, route() and cycle detection
 src/cli.ts          The mr command: run, --check and --list
 src/index.ts        Public API
-example.md          A complete example program
-kitchen-sink.md     A Pokédex workflow using every feature
-examples/           Values and async examples
-test/               Core, CLI and kitchen-sink tests
+examples/           Example programs, from basics.md to pokedex.md
+test/               Core, CLI and example tests
 ```
 
 **Only run Markdown files you trust.** Executable fences run with the same filesystem, network, process and environment access as `mr` itself. This is a language runtime, not a sandbox, and `mr README.md` runs this file's code too. Value substitution never becomes executable source, but that does not make an untrusted document safe to run.
 
-See [TESTING.md](TESTING.md) for what has been verified. Syntax rewriting uses the [TypeScript compiler API](https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API); flags and stdin follow Bun's [argument](https://bun.com/guides/process/argv) and [stdin](https://bun.com/guides/process/stdin) guides.
+`bun test` runs the core, CLI and example tests; `npm run test:node` runs the same suite under Node, skipping the tests that need Bun. Syntax rewriting uses the [TypeScript compiler API](https://github.com/microsoft/TypeScript/wiki/Using-the-Compiler-API); flags and stdin follow Bun's [argument](https://bun.com/guides/process/argv) and [stdin](https://bun.com/guides/process/stdin) guides.

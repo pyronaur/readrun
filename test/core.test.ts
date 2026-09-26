@@ -413,8 +413,8 @@ test("runFile reads and runs a real .md file", async () => {
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
-test("the example works with and without arguments", async () => {
-  const filename = fileURLToPath(new URL('../example.md', import.meta.url));
+test("examples/basics.md works with and without arguments", async () => {
+  const filename = fileURLToPath(new URL('../examples/basics.md', import.meta.url));
   const source = await readFile(filename, 'utf8');
   for (const args of [[], ['hello', 'world']]) {
     const { runtime, output } = capture(source, { filename, args, globals: { Bun: { argv: ['/bin/bun', filename, ...args] } } });
