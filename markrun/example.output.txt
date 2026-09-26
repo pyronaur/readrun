@@ -1,11 +1,7 @@
 Only if arguments were passed
-# Run: This is markdown
 That's referenced inside the script
 And it uses hello world
 In addition to more than one, there's more than 1 execution too
-There can be more than one # Always: More than 1
-We can have multiple md blocks like this
-# Last Section
+There can be more than one We can have multiple md blocks like this
 ## I mean, this renders nicely!
-Because it's rendered with console.log in the first section # Always: More than 1
-We can have multiple md blocks like this
+Because it's rendered with console.log in the first section

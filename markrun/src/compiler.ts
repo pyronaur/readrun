@@ -49,19 +49,24 @@ export function compileRegion(document: ParsedDocument, region: Region, asynchro
       if (ts.isTypeNode(node)) return node;
       if (!asynchronous && depth === 0 && (ts.isAwaitExpression(node) || (ts.isForOfStatement(node) && node.awaitModifier))) {
         const line = node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1;
-        throw new MarkrunError("ASYNC_SECTION", `Implicit section pulls are synchronous. Move top-level await into the entry program (${region.label}).`, document.filename, line);
+        throw new MarkrunError("ASYNC_SECTION", `Section pulls are synchronous. Move top-level await into the entry program (${region.name}).`, document.filename, line);
       }
-      // Tagged templates (String.raw, Bun.$, etc.) belong to their tag, not Markrun.
-      if (ts.isTaggedTemplateExpression(node)) {
-        const tag = ts.visitNode(node.tag, child => visit(child, depth)) as ts.LeftHandSideExpression;
-        const template = ts.visitEachChild(node.template, child => visit(child, depth), context) as ts.TemplateLiteral;
-        return factory.updateTaggedTemplateExpression(node, tag, node.typeArguments, template);
-      }
-      const isReference = (ts.isNoSubstitutionTemplateLiteral(node) && node.text.trimStart().startsWith("@:"))
-        || (ts.isTemplateExpression(node) && node.head.text.trimStart().startsWith("@:"));
-      if (isReference) {
-        const argument = ts.visitEachChild(node, child => visit(child, depth), context) as ts.Expression;
-        return factory.createCallExpression(factory.createPropertyAccessExpression(member("markrun"), "pull"), undefined, [argument]);
+      // `$: name = 'Section'` becomes `const name = markrun.pull('Section')`.
+      if (ts.isLabeledStatement(node) && node.label.text === "$") {
+        const line = node.getSourceFile().getLineAndCharacterOfPosition(node.getStart()).line + 1;
+        const expression = ts.isExpressionStatement(node.statement) ? node.statement.expression : undefined;
+        const assignment = expression && ts.isBinaryExpression(expression) && expression.operatorToken.kind === ts.SyntaxKind.EqualsToken ? expression : undefined;
+        if (!assignment || !ts.isIdentifier(assignment.left)) {
+          throw new MarkrunError("PULL", "A $: pull must assign a section to a name, as in $: md = 'Section'.", document.filename, line);
+        }
+        if (!ts.isBlock(node.parent) && !ts.isSourceFile(node.parent) && !ts.isCaseOrDefaultClause(node.parent)) {
+          throw new MarkrunError("PULL", "A $: pull declares a variable, so it needs its own block. Wrap it in { }.", document.filename, line);
+        }
+        const argument = ts.visitNode(assignment.right, child => visit(child, depth)) as ts.Expression;
+        const pull = factory.createCallExpression(factory.createPropertyAccessExpression(member("markrun"), "pull"), undefined, [argument]);
+        return factory.createVariableStatement(undefined, factory.createVariableDeclarationList(
+          [factory.createVariableDeclaration(assignment.left.text, undefined, undefined, pull)], ts.NodeFlags.Const,
+        ));
       }
       if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
         // Resolve dynamic imports relative to the .mr file, not this interpreter module.
@@ -101,7 +106,7 @@ export function compileRegion(document: ParsedDocument, region: Region, asynchro
     const sourceURL = `${document.filename.replace(/[\r\n]/g, "")}.${region.id.replace(":", "-")}.js`;
     executable = new Constructor(internal, ...parameters, ...globals, `${result.outputText}\n//# sourceURL=${sourceURL}`);
   } catch (cause) {
-    throw new MarkrunError("SYNTAX", `Cannot compile ${region.label}: ${cause instanceof Error ? cause.message : String(cause)}`, document.filename, region.line, cause);
+    throw new MarkrunError("SYNTAX", `Cannot compile ${region.name}: ${cause instanceof Error ? cause.message : String(cause)}`, document.filename, region.line, cause);
   }
 
   return context => executable(

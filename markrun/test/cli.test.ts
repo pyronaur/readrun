@@ -21,18 +21,18 @@ test('CLI help works without executing a file', () => {
   assert.match(result.stdout, /Markrun 0.1/);
 });
 
-test('CLI --list indexes every heading without running the entry', () => {
+test('CLI --list names every section without running the entry', () => {
   const result = cli(['--list', 'example.mr']);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /@:# Run: This is markdown/);
-  assert.match(result.stdout, /@:## I mean, this renders nicely!/);
+  assert.match(result.stdout, /^Run\tline 15$/m);
+  assert.match(result.stdout, /^Last Section\tline 30$/m);
   assert.doesNotMatch(result.stdout, /In addition/);
 });
 
 test('CLI --check validates the example without evaluating Bun-specific code', () => {
   const result = cli(['--check', 'example.mr']);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /OK: example.mr \(4 headings\)/);
+  assert.match(result.stdout, /OK: example.mr \(3 sections\)/);
 });
 
 test('CLI normalizes argv and passes user arguments', async () => {

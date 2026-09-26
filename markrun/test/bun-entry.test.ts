@@ -17,7 +17,7 @@ test('Bun native entry: bun run example.mr hello world', options, () => {
   const result = run(['run', 'example.mr', 'hello', 'world']);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /And it uses hello world/);
-  assert.match(result.stdout, /# Last Section/);
+  assert.match(result.stdout, /## I mean, this renders nicely!/);
   assert.equal(result.stdout.split("In addition to more than one, there's more than 1 execution too").length - 1, 1);
 });
 
@@ -25,14 +25,14 @@ test('Bun native entry: no user arguments skip the Run section', options, () => 
   const result = run(['run', 'example.mr']);
   assert.equal(result.status, 0, result.stderr);
   assert.doesNotMatch(result.stdout, /Only if arguments were passed/);
-  assert.match(result.stdout, /# Always: More than 1/);
+  assert.match(result.stdout, /We can have multiple md blocks like this/);
 });
 
 test('Bun native loader supports arbitrary .mr filenames, not just the example', options, async () => {
   const directory = await mkdtemp(join(tmpdir(), 'markrun-bun-'));
   try {
     const filename = join(directory, 'different.mr');
-    await writeFile(filename, '```ts\nconsole.log(`@:# A`);\n```\n---\n# A\nworks');
+    await writeFile(filename, '```ts\n$: a = "A";\nconsole.log(a);\n```\n<!--$: A -->\n# A\nworks');
     const result = run(['run', filename]);
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /# A\nworks/);

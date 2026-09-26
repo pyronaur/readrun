@@ -1,29 +1,27 @@
 # Verification report
 
-Recorded on September 22, 2026.
+Recorded on September 26, 2026.
 
 ## Executed checks
 
 | Check | Result |
 | --- | --- |
 | TypeScript source type-check: `tsc --noEmit` | Passed |
-| Loader JavaScript syntax: `node --check src/register.js` | Passed; syntax only |
-| Core-language tests | 55 passed |
+| Core-language tests | 52 passed |
 | Explicit CLI subprocess tests | 6 passed |
-| Native Bun loader / Bun.argv parity tests | 4 skipped; Bun not available |
-| Entire test suite | 65 tests: 61 passed, 0 failed, 4 skipped |
-| `examples/parameters.mr Ada` via the portable CLI under Node | Passed |
-| `examples/async-entry.mr` via the portable CLI under Node | Passed |
+| Native Bun loader / Bun.argv parity tests | 4 passed under Bun; skipped under Node |
+| Entire test suite under Bun (`bun test`) | 62 tests: 62 passed, 0 failed |
+| Entire test suite under Node (`npm run test:node`) | 62 tests: 58 passed, 0 failed, 4 skipped |
+| `examples/parameters.mr Ada` via the CLI | Passed |
+| `examples/async-entry.mr` via the native Bun loader | Passed |
 
-Environment: Linux x86_64, Node.js 22.16.0, TypeScript 5.8.3, and @types/node 24.0.4. Test dependencies were available locally; no successful package install or Bun execution occurred in this environment. Bun was not installed, and the attempted network installation was blocked by unavailable DNS/network access.
-
-The recorded test output is in `test-results.tap`.
+Environment: macOS, Bun 1.4.0, TypeScript 5.8.3, and @types/node 24.0.4.
 
 ## Verification boundary
 
-The core and CLI were really executed; they are not pseudocode. The example tests inject a minimal `Bun.argv` value into the otherwise unchanged interpreter so its conditional branches can be checked under Node. This is not a claim to have run Bun or emulated Bun's runtime APIs. `example.output.txt` was recorded from that core execution with the user arguments `hello world`.
+The core, CLI and native Bun loader were really executed; they are not pseudocode. The example tests inject a minimal `Bun.argv` value into the interpreter so its conditional branches can also be checked under Node. `example.output.txt` was recorded from the CLI with the user arguments `hello world`.
 
-The `src/register.js` preload and exact `bun run example.mr` command are **implemented but unverified on Bun here**. JavaScript syntax checking cannot verify loader registration, custom-entrypoint resolution, Bun console inspection, or Bun's argument vector. Four native smoke tests exercise those behaviors when the suite is run under the real Bun runtime; they are explicitly skipped under Node instead of passing via a mock.
+The four native smoke tests cover loader registration, custom-entrypoint resolution and Bun's argument vector. They run under Bun and are skipped under Node instead of passing via a mock.
 
 No statement-level source-map accuracy, production hardening, package-condition completeness, complete CommonMark conformance, or sandbox security is claimed.
 

@@ -4,16 +4,16 @@ const dangerousKeys = new Set(["__proto__", "prototype", "constructor"]);
 
 /** Code runs when this value is created by pull(), never during inspection/coercion. */
 export class Markdown {
-  readonly heading: string;
+  readonly name: string;
   readonly source: string;
   readonly #filename: string;
   readonly #line: number;
   readonly #strict: boolean;
   readonly #values = new Map<string, unknown>();
 
-  constructor(source: string, heading: string, filename: string, line: number, strict = false) {
+  constructor(source: string, name: string, filename: string, line: number, strict = false) {
     this.source = source;
-    this.heading = heading;
+    this.name = name;
     this.#filename = filename;
     this.#line = line;
     this.#strict = strict;
@@ -49,7 +49,7 @@ export class Markdown {
     return this.source.replace(/\{\{\s*([A-Za-z_$][\w$.-]*)\s*\}\}/g, (placeholder, name: string) => {
       const value = this.get(name);
       if (value === undefined) {
-        if (this.#strict) throw new MarkrunError("VARIABLE", `Missing variable ${JSON.stringify(name)} in ${this.heading}.`, this.#filename, this.#line);
+        if (this.#strict) throw new MarkrunError("VARIABLE", `Missing variable ${JSON.stringify(name)} in ${this.name}.`, this.#filename, this.#line);
         return placeholder;
       }
       // This is data substitution, never eval(), and never feeds the executable code compiler.

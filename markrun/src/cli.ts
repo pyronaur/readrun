@@ -9,7 +9,7 @@ const help = `Markrun 0.1 — executable Markdown
 Usage:
   mr file.mr [arguments...]                Execute from any directory
   mr --check file.mr                       Syntax-check without executing
-  mr --list file.mr                        List addressable headings
+  mr --list file.mr                        List section names
 
 Only run .mr files you trust: executable fences have full runtime access.`;
 
@@ -26,11 +26,11 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   const document = new Markrun(await readFile(filename, "utf8"), { filename, args });
   if (mode === "--check") {
     document.check();
-    console.log(`OK: ${file} (${document.document.sections.length} headings)`);
+    console.log(`OK: ${file} (${document.document.sections.length} sections)`);
     return;
   }
   if (mode === "--list") {
-    for (const section of document.document.sections) console.log(`@:${section.label}\tline ${section.line}`);
+    for (const section of document.document.sections) console.log(`${section.name}\tline ${section.line}`);
     return;
   }
 

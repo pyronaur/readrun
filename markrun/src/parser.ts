@@ -1,22 +1,18 @@
 import { MarkrunError } from "./errors.ts";
 
 export interface Token {
-  kind: "text" | "heading" | "code" | "stop";
+  kind: "text" | "marker" | "code";
   raw: string;
   line: number;
   endLine: number;
   code?: string;
   executable?: boolean;
-  level?: number;
-  title?: string;
+  name?: string;
 }
 
 export interface Region {
   id: string;
-  label: string;
-  level: number;
-  title: string;
-  alias: string;
+  name: string;
   line: number;
   tokens: Token[];
 }
@@ -31,11 +27,11 @@ export interface ParsedDocument {
 }
 
 const executableLanguages = new Set(["", "ts", "typescript", "js", "javascript"]);
-export const normalizeHeading = (value: string): string => value.trim().replace(/\s+/g, " ");
+export const normalizeName = (value: string): string => value.trim().replace(/\s+/g, " ");
 
-/** A deliberate Markdown subset: ATX headings and top-level fenced blocks. */
+/** A deliberate Markdown subset: `<!--$: Name -->` section markers and top-level fenced blocks. */
 export function parse(source: string, filename = "document.mr"): ParsedDocument {
-  source = source.replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n");
+  source = source.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
   const lines = source.split("\n");
   const tokens: Token[] = [];
   let inComment = false;
@@ -43,7 +39,14 @@ export function parse(source: string, filename = "document.mr"): ParsedDocument 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const start = i;
-    // A full-line HTML comment is prose, never an executable container.
+    const marker = inComment ? null : /^ {0,3}<!--\s*\$:(.*?)-->[ \t]*$/.exec(line);
+    if (marker) {
+      const name = normalizeName(marker[1]);
+      if (!name) throw new MarkrunError("MARKER", "Section markers need a name: <!--$: Name -->.", filename, i + 1);
+      tokens.push({ kind: "marker", raw: line, line: i + 1, endLine: i + 1, name });
+      continue;
+    }
+    // Any other full-line HTML comment is prose, never an executable container.
     if (inComment || /^ {0,3}<!--/.test(line)) {
       inComment = !line.includes("-->");
       tokens.push({ kind: "text", raw: line, line: i + 1, endLine: i + 1 });
@@ -69,74 +72,41 @@ export function parse(source: string, filename = "document.mr"): ParsedDocument 
         raw: lines.slice(start, i + 1).join("\n"), code: body.join("\n"),
         executable: delimiter === "`" && executableLanguages.has(info.toLowerCase()),
       });
-    } else if (/^ {0,3}---[ \t]*$/.test(line)) {
-      tokens.push({ kind: "stop", raw: line, line: i + 1, endLine: i + 1 });
     } else {
-      const heading = /^ {0,3}(#{1,6})(?:[ \t]+(.*)|[ \t]*)$/.exec(line);
-      if (heading) {
-        const title = normalizeHeading((heading[2] ?? "").replace(/(?:^|[ \t]+)#+[ \t]*$/, ""));
-        if (!title) throw new MarkrunError("HEADING", "Headings need a nonempty title so they can be referenced.", filename, i + 1);
-        tokens.push({ kind: "heading", raw: line, line: i + 1, endLine: i + 1, level: heading[1].length, title });
-      } else {
-        tokens.push({ kind: "text", raw: line, line: i + 1, endLine: i + 1 });
-      }
+      tokens.push({ kind: "text", raw: line, line: i + 1, endLine: i + 1 });
     }
   }
 
-  function regionTokens(start: number, end: number): Token[] {
-    const result: Token[] = [];
-    for (let i = start; i < end && tokens[i].kind !== "stop"; i++) result.push(tokens[i]);
-    return result;
-  }
-
-  const sections: Region[] = [];
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i];
-    if (token.kind !== "heading") continue;
-    let end = i + 1;
-    while (end < tokens.length) {
-      const next = tokens[end];
-      if (next.kind === "heading" && next.level! <= token.level!) break;
-      end++;
+  // The entry runs up to the first marker; each section runs from its marker to the next.
+  const markers = tokens.flatMap((token, index) => token.kind === "marker" ? [index] : []);
+  const sections: Region[] = markers.map((index, n) => {
+    const token = tokens[index];
+    return { id: `section:${token.line}`, name: token.name!, line: token.line, tokens: tokens.slice(index + 1, markers[n + 1] ?? tokens.length) };
+  });
+  const seen = new Map<string, Region>();
+  for (const section of sections) {
+    const previous = seen.get(section.name);
+    if (previous) {
+      throw new MarkrunError("DUPLICATE", `Section ${JSON.stringify(section.name)} is already defined on line ${previous.line}.`, filename, section.line);
     }
-    const title = token.title!;
-    const alias = normalizeHeading(title.split(":", 1)[0]);
-    sections.push({
-      id: `heading:${token.line}`, label: `${"#".repeat(token.level!)} ${title}`,
-      level: token.level!, title, alias, line: token.line, tokens: regionTokens(i, end),
-    });
+    seen.set(section.name, section);
   }
 
   return {
     source, filename, lineCount: lines.length, tokens, sections,
-    entry: { id: "entry", label: "<entry>", title: "", alias: "", level: 0, line: 1, tokens: regionTokens(0, tokens.length) },
+    entry: { id: "entry", name: "<entry>", line: 1, tokens: tokens.slice(0, markers[0] ?? tokens.length) },
   };
 }
 
-/** Resolve full titles first, then the label preceding a colon. Hash depth is significant. */
-export function resolveSection(document: ParsedDocument, selector: string): Region {
-  if (typeof selector !== "string") {
-    throw new MarkrunError("SELECTOR", "A section selector must be a string.", document.filename);
+/** Names are exact and case-sensitive, with whitespace normalized. */
+export function resolveSection(document: ParsedDocument, name: string): Region {
+  if (typeof name !== "string" || !normalizeName(name)) {
+    throw new MarkrunError("SELECTOR", "A section name must be a nonempty string.", document.filename);
   }
-  const input = selector.trim().replace(/^@:\s*/, "");
-  const match = /^(#{1,6})[ \t]+(.+)$/.exec(input);
-  if (!match) {
-    throw new MarkrunError("SELECTOR", `Invalid selector ${JSON.stringify(selector)}. Use @:# Heading or @:## Subheading.`, document.filename);
-  }
-  const level = match[1].length;
-  const name = normalizeHeading(match[2]);
-  const atLevel = document.sections.filter(section => section.level === level);
-  const exact = atLevel.filter(section => section.title === name);
-  const matches = exact.length ? exact : atLevel.filter(section => section.alias === name);
-  if (matches.length === 1) return matches[0];
-  if (matches.length > 1) {
-    throw new MarkrunError("AMBIGUOUS", `Ambiguous selector ${JSON.stringify(selector)}; matches lines ${matches.map(s => s.line).join(", ")}. Use a unique full heading.`, document.filename);
-  }
-  const elsewhere = document.sections.filter(section => section.title === name || section.alias === name);
-  const hint = elsewhere.length
-    ? ` Heading depth matters. Did you mean ${elsewhere.map(s => JSON.stringify(`@:${s.label}`)).join(" or ")}?`
-    : ` Available headings: ${document.sections.map(s => `@:${s.label}`).join(", ") || "(none)"}.`;
-  throw new MarkrunError("NOT_FOUND", `No section matches ${JSON.stringify(selector)}.${hint}`, document.filename);
+  const section = document.sections.find(item => item.name === normalizeName(name));
+  if (section) return section;
+  const available = document.sections.map(item => JSON.stringify(item.name)).join(", ") || "(none)";
+  throw new MarkrunError("NOT_FOUND", `No section named ${JSON.stringify(name)}. Available sections: ${available}.`, document.filename);
 }
 
 export function markdownOf(region: Region): string {

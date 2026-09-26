@@ -65,7 +65,7 @@ export class Markrun {
   }
 
   #fragment(region: Region, values?: Record<string, unknown>): Markdown {
-    const result = new Markdown(markdownOf(region), region.label, this.document.filename, region.line, this.#options.strictVariables);
+    const result = new Markdown(markdownOf(region), region.name, this.document.filename, region.line, this.#options.strictVariables);
     if (values) result.set(values);
     return result;
   }
@@ -99,14 +99,14 @@ export class Markrun {
 
   #executionError(cause: unknown, region: Region, line: number): MarkrunError {
     if (cause instanceof MarkrunError) return cause;
-    return new MarkrunError("EXECUTION", `While executing the block in ${region.label}: ${cause instanceof Error ? cause.message : String(cause)}`, this.document.filename, line, cause);
+    return new MarkrunError("EXECUTION", `While executing the block in ${region.name}: ${cause instanceof Error ? cause.message : String(cause)}`, this.document.filename, line, cause);
   }
 
   /** Pull is eager and synchronous. Every call creates a fresh, independently parameterized value. */
-  pull(selector: string, values?: Record<string, unknown>): Markdown {
-    const region = resolveSection(this.document, selector);
+  pull(name: string, values?: Record<string, unknown>): Markdown {
+    const region = resolveSection(this.document, name);
     if (this.#stack.some(active => active.id === region.id)) {
-      const chain = [...this.#stack, region].map(item => `${item.label} (line ${item.line})`).join(" -> ");
+      const chain = [...this.#stack, region].map(item => `${item.name} (line ${item.line})`).join(" -> ");
       throw new MarkrunError("CYCLE", `Circular section pull: ${chain}`, this.document.filename, region.line);
     }
     if (this.#stack.length >= (this.#options.maxDepth ?? 64)) {
@@ -126,7 +126,7 @@ export class Markrun {
     }
   }
 
-  /** Execute only the entry region, stopping at the first standalone ---. Prose is not auto-printed. */
+  /** Execute only the entry region, which ends at the first section marker. Prose is not auto-printed. */
   async run(values?: Record<string, unknown>): Promise<Markdown> {
     if (this.#running) throw new MarkrunError("REENTRY", "This document's entry program is already running.", this.document.filename);
     this.#running = true;

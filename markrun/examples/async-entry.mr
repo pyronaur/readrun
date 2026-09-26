@@ -1,11 +1,10 @@
 ```ts
-// Top-level await belongs to the entry program. Implicit section pulls stay synchronous.
+// Top-level await belongs to the entry program. Section pulls stay synchronous.
 const { basename } = await import('node:path');
 await Promise.resolve();
-const md = `@:# Result`;
+$: md = 'Result';
 md.set('filename', basename(import.meta.filename));
 console.log(md);
 ```
----
-# Result
+<!--$: Result -->
 Ran {{ filename }} in sequence.
