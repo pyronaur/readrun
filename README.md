@@ -14,9 +14,24 @@ if (chapter) {
 }
 ```
 
+A whole program, `greet.md`:
+
+````markdown
+<!-- Greets someone. Usage: mr greet.md NAME -->
+```ts run
+$: greeting = 'Greeting', { name: Bun.argv[2] ?? 'world' };
+console.log(greeting);
+```
+
+<!--$: Greeting -->
+# Hello, {{ name }}
+````
+
+`mr greet.md Ada` prints `# Hello, Ada`. The comment is a note and never prints, the code renders the `Greeting` section with a value, and GitHub shows the whole file as ordinary Markdown.
+
 Run `mr README.md <chapter>` to read a chapter in your terminal:
 
-- `install`: build and install the `mr` command
+- `install`: install the `mr` command
 - `examples`: the example files, from a first program to a Pokédex
 - `rules`: the whole language on one table
 - `output`: what a section prints, and in what order
@@ -32,15 +47,19 @@ Run `mr README.md <chapter>` to read a chapter in your terminal:
 <!--$: install -->
 ## Install
 
-With [Bun](https://bun.com) installed, from this directory:
+Download `mr` for macOS or Linux from the [latest release](https://github.com/pyronaur/markrun/releases/latest). It is one file that includes the Bun runtime and the TypeScript compiler, so nothing else is needed:
 
 ```sh
-bun install
-just install          # builds ./dist/mr and copies it to ~/.local/bin/mr
-mr README.md
+mkdir -p ~/.local/bin
+curl -fsSL https://github.com/pyronaur/markrun/releases/latest/download/mr-darwin-arm64.tar.gz | tar -xz -C ~/.local/bin
+mr --version
 ```
 
-The `mr` binary includes the Bun runtime and the TypeScript compiler, and runs a file from any directory. Without installing, `bun src/cli.ts README.md` does the same.
+Replace `darwin-arm64` with `darwin-x64`, `linux-x64` or `linux-arm64` to match your machine, and make sure `~/.local/bin` is on your `PATH`.
+
+With [Bun](https://bun.com) installed, `bun install -g github:pyronaur/markrun` installs `mr` too. It runs the TypeScript source with your Bun, so it starts a little slower than the release binary.
+
+From a clone of this repository, `bun install` and then `just install` build `./dist/mr` and copy it to `~/.local/bin/mr`. Without installing, `bun src/cli.ts README.md` does the same as `mr README.md`.
 
 ```sh
 mr file.md [arguments...]     # run the file

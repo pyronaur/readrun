@@ -3,6 +3,23 @@
   "version": "0.1.0",
   "private": true,
   "description": "Run Markdown files as commands: TypeScript blocks are code, sections are templates.",
+  "keywords": [
+    "markdown",
+    "cli",
+    "bun",
+    "typescript",
+    "templates",
+    "literate-programming",
+    "claude-code",
+    "hooks"
+  ],
+  "author": "pyronaur",
+  "homepage": "https://github.com/pyronaur/markrun#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pyronaur/markrun.git"
+  },
+  "bugs": "https://github.com/pyronaur/markrun/issues",
   "type": "module",
   "bin": {
     "mr": "./src/cli.ts"

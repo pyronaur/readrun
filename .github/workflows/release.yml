@@ -1,0 +1,29 @@
+name: Release
+
+# Push a tag such as v0.1.0 to build mr for each platform and attach it to a GitHub release.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun test
+      - name: Build
+        run: |
+          mkdir -p release
+          for target in darwin-arm64 darwin-x64 linux-x64 linux-arm64; do
+            bun build ./src/cli.ts --compile --bytecode --no-compile-autoload-bunfig --target=bun-$target --outfile dist/$target/mr
+            tar -czf release/mr-$target.tar.gz -C dist/$target mr
+          done
+      - name: Publish
+        run: gh release create "$GITHUB_REF_NAME" release/* --title "$GITHUB_REF_NAME" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
