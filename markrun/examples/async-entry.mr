@@ -1,10 +1,13 @@
 ```ts
-// Top-level await belongs to the entry program. Section pulls stay synchronous.
-const { basename } = await import('node:path');
-await Promise.resolve();
-$: md = 'Result';
-md.set('filename', basename(import.meta.filename));
+// Every region can await, including sections.
+import { basename } from 'node:path';
+
+$: md = 'Result', { filename: basename(import.meta.filename) };
 console.log(md);
 ```
 <!--$: Result -->
+```ts
+await Bun.sleep(10);
+console.log('Waited inside the section.');
+```
 Ran {{ filename }} in sequence.

@@ -1,10 +1,12 @@
 # Markrun
 
-**Pull a section. Run its code. Render its Markdown.**
+**A Markdown file that runs as a command.**
 
-Markrun is a small executable-Markdown language. A `.mr` file is evaluated top to bottom, stopping at the first section marker such as `<!--$: Run -->`. Sections after that point are available on demand. Inside executable code, a statement such as `$: md = 'Run'` pulls the matching section and stores its `Markdown` value in `md`.
+Markrun is a small executable-Markdown language for terminal workflows. A `.mr` file is Markdown with TypeScript/JavaScript fences. `mr file.mr` runs the top of the file, the *entry*, and prints its text and output in order. Sections marked with `<!--$: Name -->` are templates: the entry renders one with `$: md = 'Name', { values }` and decides what to do with the result.
 
-This is a local 0.1 prototype, not a published npm package. The interpreter and CLI have been tested under Node; the native Bun loader is included but could not be exercised in the build environment. See [TESTING.md](TESTING.md) for the exact verification boundary.
+Flags, stdin and stdout use plain Bun and Node APIs. Markrun adds only the section markers, `$:` pulls and a `route()` helper.
+
+This is a local 0.1 prototype, not a published npm package. See [TESTING.md](TESTING.md) for what has been verified.
 
 ## Run it
 
@@ -33,6 +35,7 @@ bun src/cli.ts --check example.mr
 bun src/cli.ts --list example.mr
 bun run examples/parameters.mr Ada
 bun run examples/async-entry.mr
+bun src/cli.ts kitchen-sink.mr --help
 bun test
 bun run check
 ```
@@ -57,8 +60,7 @@ To add Markrun to another local project, copy `src/`, install the `typescript` d
 const args = Bun.argv.slice(2);
 
 if (args.length > 0) {
-  $: md = `Run`;
-  md.set('arguments', args.join(' '));
+  $: md = 'Run', { arguments: args.join(' ') };
   console.log(md);
 }
 
@@ -87,115 +89,117 @@ console.log("In addition to more than one, there's more than 1 execution too");
 Because it's rendered with console.log in the first section
 ````
 
-The supplied `example.mr` closes the fence in `Run` with four backticks; a closing fence may be longer than its opener.
+The supplied `example.mr` closes the fence in `Run` with four backticks; a closing fence may be longer than its opener. `Always` is an ordinary section name, not a reserved lifecycle hook.
 
-`Always` is an ordinary section name, not a reserved lifecycle hook. Headings such as `## I mean, this renders nicely!` are plain Markdown; only markers define sections.
+`kitchen-sink.mr` is a small Pokédex using every feature: flags, names from arguments or stdin, `--help` and `--version` routes, a section that awaits a `fetch`, sections rendering sections, JSON output, and stderr with exit codes. It needs internet access to reach [PokeAPI](https://pokeapi.co).
+
+```sh
+mr kitchen-sink.mr pikachu bulbasaur
+echo eevee | mr kitchen-sink.mr --json | jq '.[0].types'
+mr kitchen-sink.mr --help
+```
 
 ## Language rules
 
 | Construct | Meaning |
 | --- | --- |
-| Backtick fence with `ts`, `typescript`, `js`, `javascript`, or no label | Execute its body as TypeScript/JavaScript. |
-| `<!--$: Run -->` on its own line, outside a fence | Start a section named `Run`. It ends at the next marker. The first marker also ends the entry program. |
-| `$: md = 'Run'` inside executable code | Immediately execute the `Run` section, then declare `const md` holding its Markdown. |
-| `md.set('key', value)` | Set a value on that particular Markdown object; chainable. |
-| `{{ key }}` | Substitute a value when the Markdown is rendered. This is data, not evaluated code. |
-| `console.log(md)` / `String(md)` / `md.render()` | Render Markdown with executable fences removed. Do not rerun those fences. |
+| Backtick fence with `ts`, `typescript`, `js`, `javascript`, or no label | Executable code. |
+| Everything before the first marker | The entry. `mr file.mr` runs it. |
+| `<!--$: Name -->` on its own line, outside a fence | Starts a section named `Name`. It runs until the next marker. |
+| `$: md = 'Name'` / `$: md = 'Name', { values }` | Render the section now and declare `const md`, a string with its output. |
+| `{{ key }}` | Filled from the values passed at the pull. A missing value is an error. |
+| Any other full-line `<!-- … -->` comment | A note. Never executed, never printed. |
+| `import { route } from 'markrun'` | `await route('Help', ['-h', '--help'])` prints a section and exits when a flag is passed. |
 
-`$:` is an ordinary JavaScript label, so the file stays valid TypeScript. Only statements labeled `$` are pulls; strings, comments, templates and other labels are left alone. The right-hand side can be any expression:
+### Rendering
 
-```ts
-const name = 'Run';
-$: md = name;
-```
+Rendering a section goes top to bottom: its text, then whatever its code prints, then more text, in file order. The entry prints as it goes. A pulled section collects the same output into the string that `$:` returns, and the caller decides where it goes.
 
-A pull must assign to a plain name, and it must sit directly in a block (`if (x) $: md = 'Run'` needs braces), because it becomes a `const` declaration. Other HTML comments, such as `<!-- TODO -->`, are ordinary prose. Marker spacing is flexible: `<!--$:Run-->` and `<!-- $: Run -->` are the same marker.
-
-The compiler rewrites actual TypeScript syntax-tree nodes, not arbitrary source text. No `String.prototype` patching is involved.
-
-### Execution versus rendering
-
-A pull is **eager**; interpolation is **lazy**:
+````markdown
+<!--$: List -->
+# {{ title }}
 
 ```ts
-$: md = 'Run';                     // Runs Run's code now.
-md.set('arguments', 'hello');      // Changes its eventual text, not executed source.
-console.log(md);                   // Renders it; no second execution.
-md.set('arguments', 'goodbye');
-console.log(md);                   // New text; still no second execution.
-
-$: another = 'Run';                // A new pull: Run's code executes again.
+for (const item of items) {
+  $: line = 'Line', { item };
+  console.log(line);          // lands right here, under the heading
+}
 ```
 
-Merely indexing a section does not execute its code. A reference inside a false branch is never pulled. Printing the same object multiple times does not repeat side effects. Compiled programs are cached, but section executions and parameter values are not shared between pulls.
+Done
+````
 
-Prose is not automatically printed during entry execution. `console.log` controls output. Rendering returns plain Markdown text, not ANSI styling, HTML, or a browser preview. A section's `console.log` output is emitted as a side effect; it is not captured into its Markdown body.
+`console.log`, `console.info` and `console.debug` inside a section are part of its output. `console.error` and `console.warn` always go to stderr. Libraries that print through the global `console` write straight to stdout.
+
+### Values
+
+A section is a template, and its values come only from the pull that renders it:
+
+```ts
+$: md = 'Greeting', { name: 'Ada' };   // {{ name }} is "Ada"
+$: line = 'Line', item;                // item's keys become the section's names
+```
+
+Inside the section, passed values are `const` variables in its code and fill its placeholders. Nothing else does: a section's own variables never reach its text, and the entry gets no values at all. To trace a `{{ name }}`, find the pull.
+
+Values must be an object. Keys that aren't valid variable names (such as `first-name` or `arguments`) still fill placeholders but are not variables. A value may not reuse a name the section declares itself.
+
+`{{ user.name }}` follows own properties only. `0` and `false` render as text, `null` renders as nothing, and `undefined` or a missing value is an error naming the section and the placeholder. Values are not Markdown-escaped, and they are never executed.
+
+Every pull runs the section again with fresh variables. Each section has its own scope, separate from its caller.
+
+### Pulls and await
+
+`$:` is an ordinary JavaScript label, so the file stays valid TypeScript. Only statements labeled `$` are pulls; strings, comments, templates and other labels are left alone. The name can be any expression, for example `$: md = name`.
+
+Every region can `await`, including sections. A pull waits for the section, so the compiler adds the `await` itself. A pull must sit directly in a block (`if (x) $: md = 'Run'` needs braces), because it becomes a `const` declaration, and inside a function that function must be `async`.
+
+### Flags, stdin and stdout
+
+Use Bun's APIs directly. `mr` makes `Bun.argv` look like a normal run, so `Bun.argv.slice(2)` holds the user's arguments.
+
+```ts
+import { parseArgs } from 'util';
+import { route } from 'markrun';
+
+await route('Help', ['-h', '--help']);          // prints <!--$: Help --> and exits 0
+
+const { values: flags, positionals } = parseArgs({
+  args: Bun.argv.slice(2),
+  options: { title: { type: 'string', default: 'Report' } },
+  allowPositionals: true,
+});
+
+const text = process.stdin.isTTY ? undefined : await Bun.stdin.text();
+const data = await Bun.stdin.json();            // one JSON value
+const rows = Bun.JSONL.parse(await Bun.stdin.text());
+```
+
+`process.stdin.isTTY` is true when nothing is piped. Without the check, reading stdin in a terminal waits for Ctrl-D, like `cat`. `Bun.JSONL.parse` stops at the first invalid line and returns what it parsed so far.
+
+`route(name, flags)` matches exact flags, combined short flags such as `-vh`, and ignores arguments after `--`. Put routes before `parseArgs` so a strict parser never sees them.
 
 ### Section boundaries and scope
 
 A section runs from its marker to the next marker, or to the end of the file. The marker line itself is not rendered. Headings, `---` and other Markdown inside a section are plain content. Sections do not nest.
 
-All executable fences in one region share a lexical scope and execute in document order. A selected section has a fresh scope, separate from the caller. Pass values explicitly rather than assuming it can see variables in the entry program.
+All executable fences in one region share a lexical scope and execute in document order. Fences must contain statement sequences. Fence boundaries insert a statement separator; they are not a mechanism for splitting a string, expression, or other token across blocks.
 
-Fences must contain statement sequences. Fence boundaries insert a statement separator; they are not a mechanism for splitting a string, expression, or other token across blocks.
-
-### Passing data before section execution
-
-`.set()` after a literal pull affects rendering only: the section's code has already run. Use the explicit API when its code needs parameters:
-
-```ts
-const md = markrun.pull('Greeting', { name: 'Ada' });
-console.log(md);
-```
-
-The selected section receives its own Markdown object as `section`:
-
-````markdown
-<!--$: Greeting -->
-# Hello, {{ name }}
-{{ message }}
-
-```ts
-section.set('message', `Welcome, ${section.get('name')}!`);
-```
-````
-
-`markrun` is the current document runtime. `markrun.args` is a read-only copy of user arguments. `section` refers to the current region's Markdown value. These names, plus the usual injected `console`, `require`, `module`, `exports`, `__filename`, and `__dirname`, are reserved at region scope.
-
-### Variables
-
-`.set()` accepts a name/value pair or an object:
-
-```ts
-md.set('arguments', 'one two');
-md.set({ count: 0, enabled: false, user: { name: 'Ada' } });
-```
-
-`{{ user.name }}` follows own properties only. Literal dotted keys take precedence. `0` and `false` are preserved, `null` becomes empty text, and missing or `undefined` values leave their placeholders visible. Set `strictVariables: true` in the programmatic API to reject missing values during rendering. Prototype-access keys are rejected. Values are not Markdown-escaped: supplying Markdown as a value intentionally renders that Markdown.
+`console`, `require`, `module`, `exports`, `__filename` and `__dirname` are provided in every region, as in CommonJS.
 
 ### Section lookup
 
 Names are matched exactly and case-sensitively, with whitespace normalized. Two markers with the same name are an error when the file is parsed. An unknown name lists the available sections. Circular pulls show their section chain, and nesting has a default depth limit of 64.
 
-### Await and imports
+### Imports
 
-The entry program supports top-level `await`, including across successive fences:
-
-```ts
-const { basename } = await import('node:path');
-await Promise.resolve();
-console.log(basename(import.meta.filename));
-```
-
-Section pulls remain synchronous so they can be used in ordinary functions and callbacks. A selected section containing top-level `await` is rejected before execution. Do asynchronous work in the entry, then pass its results into the section. Async functions and promises otherwise retain normal JavaScript behavior; Markrun does not automatically await background work you start without awaiting it.
-
-Static imports are lowered to region-local `require` calls, and are loaded when that region executes. Dynamic imports resolve relative to the `.mr` file. Bare dynamic package names currently use `require.resolve`, so packages exposing only an `import` export condition are outside this prototype's resolver support. Use explicit file URLs for those modules. `import.meta.url`, `filename`, `dirname`, and `resolve()` are supplied by the interpreter; `main` is currently always true inside interpreted regions, not a full emulation of module-entry detection.
+Static imports are lowered to region-local `require` calls, and are loaded when that region executes. Dynamic imports resolve relative to the `.mr` file. Bare dynamic package names currently use `require.resolve`, so packages exposing only an `import` export condition are outside this prototype's resolver support. Use explicit file URLs for those modules. `import.meta.url`, `filename`, `dirname`, and `resolve()` are supplied by the interpreter; `main` is currently always true inside interpreted regions. `'markrun'` always refers to the running Markrun, like `'bun'` refers to Bun.
 
 ### Markdown subset
 
 This is intentionally not a complete CommonMark parser. Structural syntax is limited to section markers, fenced blocks with up to three leading spaces, and full-line HTML comments. Everything else, including headings and `---`, is plain Markdown.
 
-Inline Markdown code spans remain prose. Tilde fences, other language labels, and annotated labels such as `ts noexec` remain display-only. Nesting executable fences inside blockquotes, lists, or arbitrary HTML blocks is not supported. Use top-level fences. Unclosed fences and markers without a name are errors.
+Inline Markdown code spans remain prose. Tilde fences, other language labels, and annotated labels such as `ts noexec` remain display-only and are printed. Nesting executable fences inside blockquotes, lists, or arbitrary HTML blocks is not supported. Use top-level fences. Unclosed fences and markers without a name are errors.
 
 ## Embedding
 
@@ -205,19 +209,17 @@ import { Markrun, runFile } from './src/index.ts';
 const runtime = new Markrun(source, {
   filename: '/absolute/path/to/document.mr',
   args: ['hello'],
-  strictVariables: true,
 });
 
-runtime.check();                         // Syntax only; no execution or type checking.
-await runtime.run();                     // Execute the entry once.
-const md = runtime.pull('Run', { arguments: 'hello' });
-console.log(md.render());
+runtime.check();                                         // Syntax only; no execution or type checking.
+await runtime.run();                                     // Run the entry, printing as it goes.
+const text = await runtime.pull('Run', { arguments: 'hello' });
 
-// Or read a real file and execute its entry:
+// Or read a real file and run its entry:
 await runFile('./example.mr');
 ```
 
-`runFile()` does not rewrite the host process's global argument vector; embedded programs should use `markrun.args` with the `args` option. The explicit CLI normalizes `process.argv` and `Bun.argv` to match a direct file invocation.
+`runFile()` does not rewrite the host process's global argument vector. The explicit CLI normalizes `process.argv` and `Bun.argv` to match a direct file invocation. `route()` calls the `exit` option, which defaults to `process.exit`.
 
 `check()` compiles every region, including unused sections. During normal execution, section code is compiled lazily when pulled. Markdown structure is always parsed eagerly. Runtime failures name the section and the starting line of the executing code block, with the original exception retained as `cause`; these are block locations, not statement-level source maps.
 
@@ -226,19 +228,20 @@ await runFile('./example.mr');
 ```text
 src/parser.ts       Markdown structure, section markers and name resolution
 src/compiler.ts     TypeScript AST rewriting and region compilation
-src/markdown.ts     Parameter storage, interpolation and inspection
-src/runtime.ts      Ordered execution, fresh pulls and cycle detection
+src/markdown.ts     Placeholder interpolation
+src/runtime.ts      Rendering, pulls, route() and cycle detection
 src/register.js     Bun's native .mr module loader
 src/cli.ts          Explicit runner, --check and --list
 src/index.ts        Public API
 example.mr          The complete example program
+kitchen-sink.mr     A Pokédex workflow using every feature
 examples/           Parameters and asynchronous-entry examples
 test/               Core, CLI and native-Bun smoke tests
 ```
 
 ## Trust boundary
 
-**Only execute `.mr` files you trust.** Executable fences run with the same filesystem, network, process, and environment access as the hosting Bun process. This is a language runtime, not a sandbox. Syntax checking does not prove a file safe. Placeholder substitution never becomes executable source, but that does not make an untrusted document safe to run.
+**Only execute `.mr` files you trust.** Executable fences run with the same filesystem, network, process, and environment access as the hosting Bun process. This is a language runtime, not a sandbox. Syntax checking does not prove a file safe. Value substitution never becomes executable source, but that does not make an untrusted document safe to run.
 
 ## Implementation references
 

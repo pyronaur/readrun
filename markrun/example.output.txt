@@ -1,7 +1,7 @@
-Only if arguments were passed
 That's referenced inside the script
 And it uses hello world
-In addition to more than one, there's more than 1 execution too
+Only if arguments were passed
 There can be more than one We can have multiple md blocks like this
+In addition to more than one, there's more than 1 execution too
 ## I mean, this renders nicely!
 Because it's rendered with console.log in the first section

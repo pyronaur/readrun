@@ -2,11 +2,12 @@ import { readFile } from "node:fs/promises";
 import { createRequire, isBuiltin } from "node:module";
 import { dirname, isAbsolute, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { compileRegion } from "./compiler.ts";
+import { format } from "node:util";
+import { compileRegion, declaredNames, isVariableName, parameters } from "./compiler.ts";
 import type { ExecutionContext, Program } from "./compiler.ts";
 import { MarkrunError } from "./errors.ts";
-import { Markdown } from "./markdown.ts";
-import { markdownOf, parse, resolveSection } from "./parser.ts";
+import { interpolate } from "./markdown.ts";
+import { parse, resolveSection } from "./parser.ts";
 import type { ParsedDocument, Region } from "./parser.ts";
 
 export interface ConsoleLike {
@@ -19,20 +20,36 @@ export interface MarkrunOptions {
   args?: readonly string[];
   console?: ConsoleLike | Console;
   globals?: Record<string, unknown>;
-  strictVariables?: boolean;
   maxDepth?: number;
+  /** Called by route() after printing. Defaults to process.exit. */
+  exit?: (code: number) => void;
 }
 
-function markdownConsole(target: ConsoleLike | Console): ConsoleLike {
-  const printable = new Set(["log", "info", "warn", "error", "debug", "trace", "assert", "dir"]);
+/** What `import { ... } from 'markrun'` gives a .mr file. */
+export interface MarkrunModule {
+  route(name: string, flags: readonly string[]): Promise<void>;
+}
+
+/** Inside a pulled section, printing appends to the section's output instead of stdout. */
+function capturingConsole(target: ConsoleLike | Console, output: string[]): ConsoleLike {
+  const captured = new Set(["log", "info", "debug"]);
   return new Proxy(target, {
     get(object, key) {
+      if (captured.has(String(key))) return (...args: unknown[]) => { output.push(format(...args)); };
       const value = Reflect.get(object, key, object);
-      if (typeof value !== "function") return value;
-      if (!printable.has(String(key))) return value.bind(object);
-      return (...args: unknown[]) => Reflect.apply(value, object, args.map(arg => arg instanceof Markdown ? arg.render() : arg));
+      return typeof value === "function" ? value.bind(object) : value;
     },
   }) as ConsoleLike;
+}
+
+/** `-h` also matches combined short flags such as `-vh`. Arguments after `--` never match. */
+function hasFlag(args: readonly string[], flags: readonly string[]): boolean {
+  const end = args.indexOf("--");
+  for (const arg of end === -1 ? args : args.slice(0, end)) {
+    if (flags.includes(arg)) return true;
+    if (/^-[A-Za-z0-9]{2,}$/.test(arg) && flags.some(flag => /^-[A-Za-z0-9]$/.test(flag) && arg.includes(flag[1]))) return true;
+  }
+  return false;
 }
 
 export class Markrun {
@@ -40,9 +57,10 @@ export class Markrun {
   readonly args: readonly string[];
   readonly #options: MarkrunOptions;
   readonly #programs = new Map<string, Program>();
-  readonly #stack: Region[] = [];
+  readonly #declared = new Map<string, Set<string>>();
   readonly #require: NodeJS.Require;
-  readonly #console: ConsoleLike;
+  readonly #console: ConsoleLike | Console;
+  readonly #module: MarkrunModule;
   #running = false;
 
   constructor(source: string, options: MarkrunOptions = {}) {
@@ -50,24 +68,19 @@ export class Markrun {
     this.document = parse(source, resolve(options.filename ?? "document.mr"));
     this.args = Object.freeze([...(options.args ?? process.argv.slice(2))]);
     this.#require = createRequire(this.document.filename);
-    this.#console = markdownConsole(options.console ?? console);
+    this.#console = options.console ?? console;
+    this.#module = { route: (name, flags) => this.#route(name, flags) };
     if (options.maxDepth !== undefined && (!Number.isInteger(options.maxDepth) || options.maxDepth < 1)) {
       throw new MarkrunError("DEPTH", "maxDepth must be a positive integer.", this.document.filename);
     }
   }
 
-  #program(region: Region, asynchronous: boolean): Program {
-    const key = `${region.id}:${asynchronous}`;
+  #program(region: Region, values: string[]): Program {
+    const key = `${region.id}:${values.join(",")}`;
     if (!this.#programs.has(key)) {
-      this.#programs.set(key, compileRegion(this.document, region, asynchronous, Object.keys(this.#options.globals ?? {})));
+      this.#programs.set(key, compileRegion(this.document, region, Object.keys(this.#options.globals ?? {}), values));
     }
     return this.#programs.get(key)!;
-  }
-
-  #fragment(region: Region, values?: Record<string, unknown>): Markdown {
-    const result = new Markdown(markdownOf(region), region.name, this.document.filename, region.line, this.#options.strictVariables);
-    if (values) result.set(values);
-    return result;
   }
 
   #resolveImport(specifier: string): string {
@@ -80,64 +93,99 @@ export class Markrun {
     return pathToFileURL(this.#require.resolve(specifier)).href;
   }
 
-  #context(region: Region, fragment: Markdown): { context: ExecutionContext; location: { line: number } } {
+  #requireFor(): NodeJS.Require {
+    const base = this.#require;
+    return Object.assign((id: string) => id === "markrun" ? this.#module : base(id), {
+      resolve: base.resolve, cache: base.cache, extensions: base.extensions, main: base.main,
+    }) as NodeJS.Require;
+  }
+
+  #context(region: Region, values: Record<string, unknown>, output: ConsoleLike | Console, text: (value: string) => void, chain: Region[]) {
     const filename = this.document.filename;
     const location = { line: region.line };
     const module = { exports: {} };
-    return {
-      location,
-      context: {
-        markrun: this, section: fragment, console: this.#console,
-        filename, dirname: dirname(filename), require: this.#require, module,
-        globals: this.#options.globals ?? {},
-        meta: { url: pathToFileURL(filename).href, filename, dirname: dirname(filename), main: true, resolve: (name: string) => this.#resolveImport(name) },
-        at: line => { location.line = line; },
-        importModule: (specifier, options) => import(this.#resolveImport(specifier), options),
+    const context: ExecutionContext = {
+      console: output, values,
+      filename, dirname: dirname(filename), require: this.#requireFor(), module,
+      globals: this.#options.globals ?? {},
+      meta: { url: pathToFileURL(filename).href, filename, dirname: dirname(filename), main: true, resolve: (name: string) => this.#resolveImport(name) },
+      at: line => { location.line = line; },
+      text: index => {
+        const chunk = region.chunks[index];
+        text(interpolate(chunk.text, values, region.name, filename, chunk.line));
       },
+      pull: (name, passed) => this.#pull(name, passed, chain),
+      importModule: (specifier, options) => specifier === "markrun" ? Promise.resolve(this.#module) : import(this.#resolveImport(specifier), options),
     };
+    return { context, location };
   }
 
   #executionError(cause: unknown, region: Region, line: number): MarkrunError {
     if (cause instanceof MarkrunError) return cause;
-    return new MarkrunError("EXECUTION", `While executing the block in ${region.name}: ${cause instanceof Error ? cause.message : String(cause)}`, this.document.filename, line, cause);
+    const where = region.id === "entry" ? "the entry" : `section ${JSON.stringify(region.name)}`;
+    return new MarkrunError("EXECUTION", `While running ${where}: ${cause instanceof Error ? cause.message : String(cause)}`, this.document.filename, line, cause);
   }
 
-  /** Pull is eager and synchronous. Every call creates a fresh, independently parameterized value. */
-  pull(name: string, values?: Record<string, unknown>): Markdown {
-    const region = resolveSection(this.document, name);
-    if (this.#stack.some(active => active.id === region.id)) {
-      const chain = [...this.#stack, region].map(item => `${item.name} (line ${item.line})`).join(" -> ");
-      throw new MarkrunError("CYCLE", `Circular section pull: ${chain}`, this.document.filename, region.line);
+  #variables(region: Region, values: Record<string, unknown>): string[] {
+    if (!this.#declared.has(region.id)) this.#declared.set(region.id, declaredNames(this.document, region));
+    const declared = this.#declared.get(region.id)!;
+    const names = Object.keys(values).filter(isVariableName).sort();
+    for (const name of names) {
+      if (declared.has(name) || parameters.includes(name) || Object.hasOwn(this.#options.globals ?? {}, name)) {
+        throw new MarkrunError("VALUE", `The value ${JSON.stringify(name)} passed to section ${JSON.stringify(region.name)} has the same name as a variable the section already has. Rename one of them.`, this.document.filename, region.line);
+      }
     }
-    if (this.#stack.length >= (this.#options.maxDepth ?? 64)) {
+    return names;
+  }
+
+  /** Render a section: run its code top to bottom and collect its text and printed output in order. */
+  async #pull(name: unknown, passed: unknown, chain: Region[]): Promise<string> {
+    if (typeof name !== "string") throw new MarkrunError("SELECTOR", "A section name must be a string.", this.document.filename);
+    const region = resolveSection(this.document, name);
+    if (passed !== undefined && (passed === null || typeof passed !== "object" || Array.isArray(passed))) {
+      throw new MarkrunError("VALUE", `Values for section ${JSON.stringify(region.name)} must be an object, as in $: md = '${region.name}', { title }.`, this.document.filename, region.line);
+    }
+    if (chain.includes(region)) {
+      const path = [...chain, region].map(item => `${item.name} (line ${item.line})`).join(" -> ");
+      throw new MarkrunError("CYCLE", `Circular section pull: ${path}`, this.document.filename, region.line);
+    }
+    if (chain.length >= (this.#options.maxDepth ?? 64)) {
       throw new MarkrunError("DEPTH", "Maximum section-pull depth exceeded.", this.document.filename, region.line);
     }
-    const program = this.#program(region, false);
-    const fragment = this.#fragment(region, values);
-    const { context, location } = this.#context(region, fragment);
-    this.#stack.push(region);
+    const values = { ...(passed as Record<string, unknown> | undefined) };
+    const program = this.#program(region, this.#variables(region, values));
+    const output: string[] = [];
+    const { context, location } = this.#context(region, values, capturingConsole(this.#console, output), text => output.push(text), [...chain, region]);
     try {
-      program(context);
-      return fragment;
+      await program(context);
     } catch (cause) {
       throw this.#executionError(cause, region, location.line);
-    } finally {
-      this.#stack.pop();
     }
+    return output.join("\n");
   }
 
-  /** Execute only the entry region, which ends at the first section marker. Prose is not auto-printed. */
-  async run(values?: Record<string, unknown>): Promise<Markdown> {
+  async #route(name: string, flags: readonly string[]): Promise<void> {
+    if (!Array.isArray(flags)) throw new MarkrunError("ROUTE", "route() needs a list of flags, as in route('Help', ['-h', '--help']).", this.document.filename);
+    if (!hasFlag(this.args, flags)) return;
+    this.#console.log(await this.#pull(name, undefined, []));
+    (this.#options.exit ?? (code => process.exit(code)))(0);
+  }
+
+  /** Render a section by name and return its text. */
+  pull(name: string, values?: Record<string, unknown>): Promise<string> {
+    return this.#pull(name, values, []);
+  }
+
+  /** Run the entry: its text and printed output go straight to the console, in order. */
+  async run(): Promise<void> {
     if (this.#running) throw new MarkrunError("REENTRY", "This document's entry program is already running.", this.document.filename);
     this.#running = true;
     const region = this.document.entry;
     try {
-      const program = this.#program(region, true);
-      const fragment = this.#fragment(region, values);
-      const { context, location } = this.#context(region, fragment);
+      const program = this.#program(region, []);
+      const { context, location } = this.#context(region, {}, this.#console, text => this.#console.log(text), [region]);
       try {
         await program(context);
-        return fragment;
       } catch (cause) {
         throw this.#executionError(cause, region, location.line);
       }
@@ -148,8 +196,8 @@ export class Markrun {
 
   /** Syntax-check every region without running any code. This is not a TypeScript type check. */
   check(): void {
-    this.#program(this.document.entry, true);
-    for (const region of this.document.sections) this.#program(region, false);
+    this.#program(this.document.entry, []);
+    for (const region of this.document.sections) this.#program(region, []);
   }
 }
 

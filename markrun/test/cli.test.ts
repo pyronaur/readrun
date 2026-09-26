@@ -24,8 +24,8 @@ test('CLI help works without executing a file', () => {
 test('CLI --list names every section without running the entry', () => {
   const result = cli(['--list', 'example.mr']);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /^Run\tline 15$/m);
-  assert.match(result.stdout, /^Last Section\tline 30$/m);
+  assert.match(result.stdout, /^Run\tline 14$/m);
+  assert.match(result.stdout, /^Last Section\tline 29$/m);
   assert.doesNotMatch(result.stdout, /In addition/);
 });
 
@@ -39,10 +39,10 @@ test('CLI normalizes argv and passes user arguments', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'markrun-cli-'));
   try {
     const filename = join(directory, 'args.mr');
-    await writeFile(filename, '```ts\nconsole.log(process.argv.slice(2).join("|")); console.log(markrun.args.join("|"));\n```');
+    await writeFile(filename, '```ts\nconsole.log(process.argv.slice(2).join("|"));\n```');
     const result = cli([filename, 'one', '--two']);
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(result.stdout.trim(), 'one|--two\none|--two');
+    assert.equal(result.stdout.trim(), 'one|--two');
   } finally { await rm(directory, { recursive: true, force: true }); }
 });
 

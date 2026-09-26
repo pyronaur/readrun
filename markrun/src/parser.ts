@@ -1,7 +1,7 @@
 import { MarkrunError } from "./errors.ts";
 
 export interface Token {
-  kind: "text" | "marker" | "code";
+  kind: "text" | "comment" | "marker" | "code";
   raw: string;
   line: number;
   endLine: number;
@@ -10,11 +10,18 @@ export interface Token {
   name?: string;
 }
 
+/** Printable text between executable fences. Comments are never part of it. */
+export interface Chunk {
+  line: number;
+  text: string;
+}
+
 export interface Region {
   id: string;
   name: string;
   line: number;
   tokens: Token[];
+  chunks: Chunk[];
 }
 
 export interface ParsedDocument {
@@ -46,10 +53,10 @@ export function parse(source: string, filename = "document.mr"): ParsedDocument 
       tokens.push({ kind: "marker", raw: line, line: i + 1, endLine: i + 1, name });
       continue;
     }
-    // Any other full-line HTML comment is prose, never an executable container.
+    // Any other full-line HTML comment is a note: never executed, never printed.
     if (inComment || /^ {0,3}<!--/.test(line)) {
       inComment = !line.includes("-->");
-      tokens.push({ kind: "text", raw: line, line: i + 1, endLine: i + 1 });
+      tokens.push({ kind: "comment", raw: line, line: i + 1, endLine: i + 1 });
       continue;
     }
     const fence = /^ {0,3}(`{3,}|~{3,})([^\n]*)$/.exec(line);
@@ -81,7 +88,8 @@ export function parse(source: string, filename = "document.mr"): ParsedDocument 
   const markers = tokens.flatMap((token, index) => token.kind === "marker" ? [index] : []);
   const sections: Region[] = markers.map((index, n) => {
     const token = tokens[index];
-    return { id: `section:${token.line}`, name: token.name!, line: token.line, tokens: tokens.slice(index + 1, markers[n + 1] ?? tokens.length) };
+    const selected = tokens.slice(index + 1, markers[n + 1] ?? tokens.length);
+    return { id: `section:${token.line}`, name: token.name!, line: token.line, tokens: selected, chunks: chunksOf(selected) };
   });
   const seen = new Map<string, Region>();
   for (const section of sections) {
@@ -92,10 +100,35 @@ export function parse(source: string, filename = "document.mr"): ParsedDocument 
     seen.set(section.name, section);
   }
 
+  const entryTokens = tokens.slice(0, markers[0] ?? tokens.length);
   return {
     source, filename, lineCount: lines.length, tokens, sections,
-    entry: { id: "entry", name: "<entry>", line: 1, tokens: tokens.slice(0, markers[0] ?? tokens.length) },
+    entry: { id: "entry", name: "<entry>", line: 1, tokens: entryTokens, chunks: chunksOf(entryTokens) },
   };
+}
+
+/** Group text between executable fences. A region's text is trimmed at its start and end. */
+function chunksOf(tokens: Token[]): Chunk[] {
+  const chunks: Chunk[] = [];
+  let current: Token[] = [];
+  const flush = () => {
+    const text = current.map(token => token.raw).join("\n");
+    if (text.trim()) chunks.push({ line: current[0].line, text });
+    current = [];
+  };
+  for (const token of tokens) {
+    if (token.kind === "comment") continue;
+    if (token.kind === "code" && token.executable) flush();
+    else current.push(token);
+  }
+  flush();
+  if (chunks.length) {
+    const leading = /^(?:[ \t]*\n)+/.exec(chunks[0].text)?.[0] ?? "";
+    chunks[0].line += leading.split("\n").length - 1;
+    chunks[0].text = chunks[0].text.slice(leading.length);
+    chunks[chunks.length - 1].text = chunks[chunks.length - 1].text.replace(/(?:\n[ \t]*)+$/, "");
+  }
+  return chunks;
 }
 
 /** Names are exact and case-sensitive, with whitespace normalized. */
@@ -107,8 +140,4 @@ export function resolveSection(document: ParsedDocument, name: string): Region {
   if (section) return section;
   const available = document.sections.map(item => JSON.stringify(item.name)).join(", ") || "(none)";
   throw new MarkrunError("NOT_FOUND", `No section named ${JSON.stringify(name)}. Available sections: ${available}.`, document.filename);
-}
-
-export function markdownOf(region: Region): string {
-  return region.tokens.filter(token => !(token.kind === "code" && token.executable)).map(token => token.raw).join("\n").trim();
 }

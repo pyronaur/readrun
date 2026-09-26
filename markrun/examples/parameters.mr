@@ -1,17 +1,11 @@
 ```ts
-// Supply values before execution when the section's code needs them.
-const md = markrun.pull('Greeting', { name: markrun.args[0] ?? 'world' });
+// Values are passed where the section is pulled. The section's code sees them as variables.
+$: md = 'Greeting', { name: Bun.argv[2] ?? 'world' };
 console.log(md);
-
-// Rendering the same value does not rerun its code.
-md.set('name', 'Markrun');
-console.log(String(md));
 ```
 <!--$: Greeting -->
 # Hello, {{ name }}
-The section computed {{ punctuation }} before it was rendered.
 
 ```ts
-console.log('Preparing a greeting for', section.get('name'));
-section.set('punctuation', '!');
+console.log(`Prepared a greeting for ${name}.`);
 ```

@@ -2,8 +2,7 @@
 const args = Bun.argv.slice(2);
 
 if (args.length > 0) {
-  $: md = `Run`;
-  md.set('arguments', args.join(' '));
+  $: md = 'Run', { arguments: args.join(' ') };
   console.log(md);
 }
 

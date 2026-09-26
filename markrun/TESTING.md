@@ -7,13 +7,14 @@ Recorded on September 26, 2026.
 | Check | Result |
 | --- | --- |
 | TypeScript source type-check: `tsc --noEmit` | Passed |
-| Core-language tests | 52 passed |
+| Core-language tests | 57 passed |
 | Explicit CLI subprocess tests | 6 passed |
-| Native Bun loader / Bun.argv parity tests | 4 passed under Bun; skipped under Node |
-| Entire test suite under Bun (`bun test`) | 62 tests: 62 passed, 0 failed |
-| Entire test suite under Node (`npm run test:node`) | 62 tests: 58 passed, 0 failed, 4 skipped |
+| Native Bun loader, Bun.argv parity and kitchen-sink tests | 8 passed under Bun; skipped under Node |
+| Entire test suite under Bun (`bun test`) | 71 tests: 71 passed, 0 failed |
+| Entire test suite under Node (`npm run test:node`) | 71 tests: 63 passed, 0 failed, 8 skipped |
 | `examples/parameters.mr Ada` via the CLI | Passed |
 | `examples/async-entry.mr` via the native Bun loader | Passed |
+| `kitchen-sink.mr` against the real PokeAPI: names, piped names, `--json`, an unknown Pokémon, no input, `-h` | Passed |
 
 Environment: macOS, Bun 1.4.0, TypeScript 5.8.3, and @types/node 24.0.4.
 
@@ -21,7 +22,7 @@ Environment: macOS, Bun 1.4.0, TypeScript 5.8.3, and @types/node 24.0.4.
 
 The core, CLI and native Bun loader were really executed; they are not pseudocode. The example tests inject a minimal `Bun.argv` value into the interpreter so its conditional branches can also be checked under Node. `example.output.txt` was recorded from the CLI with the user arguments `hello world`.
 
-The four native smoke tests cover loader registration, custom-entrypoint resolution and Bun's argument vector. They run under Bun and are skipped under Node instead of passing via a mock.
+The eight Bun-only tests cover loader registration, custom-entrypoint resolution, Bun's argument vector and the kitchen sink (against a local stand-in for PokeAPI, so no network is needed). They run under Bun and are skipped under Node instead of passing via a mock.
 
 No statement-level source-map accuracy, production hardening, package-condition completeness, complete CommonMark conformance, or sandbox security is claimed.
 
