@@ -1,4 +1,4 @@
-```ts
+```ts run
 // Every region can await, including sections.
 import { basename } from 'node:path';
 
@@ -6,7 +6,7 @@ $: md = 'Result', { filename: basename(import.meta.filename) };
 console.log(md);
 ```
 <!--$: Result -->
-```ts
+```ts run
 await Bun.sleep(10);
 console.log('Waited inside the section.');
 ```

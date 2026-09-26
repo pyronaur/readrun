@@ -28,8 +28,8 @@ test('CLI help works without executing a file', () => {
 test('CLI --list names every section without running the entry', () => {
   const result = cli(['--list', 'example.md']);
   assert.equal(result.status, 0, result.stderr);
-  assert.match(result.stdout, /^Run\tline 14$/m);
-  assert.match(result.stdout, /^Last Section\tline 29$/m);
+  assert.match(result.stdout, /^Run\tline 15$/m);
+  assert.match(result.stdout, /^Last Section\tline 36$/m);
   assert.doesNotMatch(result.stdout, /In addition/);
 });
 
@@ -43,7 +43,7 @@ test('CLI normalizes argv and passes user arguments', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'markrun-cli-'));
   try {
     const filename = join(directory, 'args.md');
-    await writeFile(filename, '```ts\nconsole.log(process.argv.slice(2).join("|"));\n```');
+    await writeFile(filename, '```ts run\nconsole.log(process.argv.slice(2).join("|"));\n```');
     const result = cli([filename, 'one', '--two']);
     assert.equal(result.status, 0, result.stderr);
     assert.equal(result.stdout.trim(), 'one|--two');
@@ -54,7 +54,7 @@ test('CLI returns nonzero and useful diagnostics on execution failure', async ()
   const directory = await mkdtemp(join(tmpdir(), 'markrun-failure-'));
   try {
     const filename = join(directory, 'bad.md');
-    await writeFile(filename, '```ts\nthrow new Error("intentional failure")\n```');
+    await writeFile(filename, '```ts run\nthrow new Error("intentional failure")\n```');
     const result = cli([filename]);
     assert.equal(result.status, 1);
     assert.match(result.stderr, /\[EXECUTION\].*bad.md:2:.*intentional failure/);

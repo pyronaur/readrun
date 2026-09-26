@@ -7,12 +7,12 @@ Recorded on September 26, 2026.
 | Check | Result |
 | --- | --- |
 | TypeScript source type-check: `tsc --noEmit` | Passed |
-| Core-language tests, including frontmatter, literal code and the compilation cache | 65 passed |
+| Core-language tests, including opt-in `run` fences, `#!` lines, frontmatter, literal code and the compilation cache | 66 passed |
 | CLI subprocess tests, including running every `README.md` chapter | 7 passed |
 | Kitchen-sink tests, against a local stand-in for PokeAPI | 4 passed |
-| Entire test suite under Bun (`bun test`) | 76 tests: 76 passed, 0 failed |
-| Entire test suite under Node (`npm run test:node`) | 76 tests: 71 passed, 0 failed, 5 skipped |
-| `mr README.md` and each chapter, `mr example.md`, `examples/*.md` | Passed |
+| Entire test suite under Bun (`bun test`) | 77 tests: 77 passed, 0 failed |
+| Entire test suite under Node (`npm run test:node`) | 77 tests: 72 passed, 0 failed, 5 skipped |
+| `mr README.md` and each chapter, `./example.md` via its `#!` line, `examples/*.md` | Passed |
 | `kitchen-sink.md` against the real PokeAPI: names, piped names, `--json`, an unknown Pokémon, no input, `-h` | Passed |
 | Compiled `mr` (bytecode) with a warm cache, measured with hyperfine | about 19 ms per run for a small hook, 49 ms with `MARKRUN_CACHE=0` |
 

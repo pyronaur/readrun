@@ -1,7 +1,7 @@
 import { MarkrunError } from "./errors.ts";
 
 export interface Token {
-  kind: "text" | "comment" | "frontmatter" | "marker" | "code";
+  kind: "text" | "comment" | "shebang" | "frontmatter" | "marker" | "code";
   raw: string;
   line: number;
   endLine: number;
@@ -33,7 +33,13 @@ export interface ParsedDocument {
   sections: Region[];
 }
 
-const executableLanguages = new Set(["", "ts", "typescript", "js", "javascript"]);
+const executableLanguages = new Set(["ts", "typescript", "js", "javascript"]);
+
+/** Execution is opt-in: ```ts run (or ```js run, or just ```run). Everything else is displayed. */
+function runs(info: string): boolean {
+  const [language = "", ...words] = info.toLowerCase().split(/\s+/);
+  return language === "run" ? words.length === 0 : executableLanguages.has(language) && words.length === 1 && words[0] === "run";
+}
 export const normalizeName = (value: string): string => value.trim().replace(/\s+/g, " ");
 
 /** A deliberate Markdown subset: `<!--$: Name -->` section markers and top-level fenced blocks. */
@@ -43,11 +49,15 @@ export function parse(source: string, filename = "document.md"): ParsedDocument 
   const tokens: Token[] = [];
   let inComment = false;
 
-  // A `---` block on the first line is frontmatter: information about the file, never printed.
-  const frontmatterEnd = /^---[ \t]*$/.test(lines[0] ?? "") ? lines.findIndex((line, index) => index > 0 && /^(?:---|\.\.\.)[ \t]*$/.test(line)) : -1;
-  for (let i = 0; i <= frontmatterEnd; i++) tokens.push({ kind: "frontmatter", raw: lines[i], line: i + 1, endLine: i + 1 });
+  // A `#!` first line lets the system run the file directly (`./file.md`). It is never printed.
+  const start = lines[0]?.startsWith("#!") ? 1 : 0;
+  if (start) tokens.push({ kind: "shebang", raw: lines[0], line: 1, endLine: 1 });
 
-  for (let i = frontmatterEnd + 1; i < lines.length; i++) {
+  // A `---` block at the top is frontmatter: information about the file, never printed.
+  const frontmatterEnd = /^---[ \t]*$/.test(lines[start] ?? "") ? lines.findIndex((line, index) => index > start && /^(?:---|\.\.\.)[ \t]*$/.test(line)) : -1;
+  for (let i = start; i <= frontmatterEnd; i++) tokens.push({ kind: "frontmatter", raw: lines[i], line: i + 1, endLine: i + 1 });
+
+  for (let i = Math.max(start, frontmatterEnd + 1); i < lines.length; i++) {
     const line = lines[i];
     const start = i;
     const marker = inComment ? null : /^ {0,3}<!--\s*\$:(.*?)-->[ \t]*$/.exec(line);
@@ -77,11 +87,10 @@ export function parse(source: string, filename = "document.md"): ParsedDocument 
       if (i >= lines.length) {
         throw new MarkrunError("FENCE", `Unclosed ${delimiter.repeat(width)} fence.`, filename, start + 1);
       }
-      // Only exact language labels execute. `ts noexec` and all tilde fences are display-only.
       tokens.push({
         kind: "code", line: start + 1, endLine: i + 1,
         raw: lines.slice(start, i + 1).join("\n"), code: body.join("\n"),
-        executable: delimiter === "`" && executableLanguages.has(info.toLowerCase()),
+        executable: delimiter === "`" && runs(info),
       });
     } else {
       tokens.push({ kind: "text", raw: line, line: i + 1, endLine: i + 1 });
@@ -121,7 +130,7 @@ function chunksOf(tokens: Token[]): Chunk[] {
     current = [];
   };
   for (const token of tokens) {
-    if (token.kind === "comment" || token.kind === "frontmatter") continue;
+    if (token.kind === "comment" || token.kind === "frontmatter" || token.kind === "shebang") continue;
     if (token.kind === "code" && token.executable) flush();
     else current.push(token);
   }

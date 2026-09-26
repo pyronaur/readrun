@@ -1,5 +1,6 @@
+#!/usr/bin/env mr
 <!-- Pokédex. Looks up Pokémon named on the command line, or piped in one per line. -->
-```ts
+```ts run
 import { parseArgs } from 'util';
 import { route } from 'markrun';
 
@@ -73,7 +74,7 @@ No Pokémon named "{{ name }}".
 <!--$: Pokédex -->
 # {{ title }}
 
-```ts
+```ts run
 const cards = [];
 for (const pokemon of team) {
   $: card = 'Card', pokemon;
@@ -86,7 +87,7 @@ console.log(cards.join('\n\n'));
 ## #{{ id }} {{ name }}
 {{ types }} · {{ height }} m · {{ weight }} kg
 
-```ts
+```ts run
 // Sections can await: fetch the Pokédex entry for this one.
 const about = await fetch(species).then(response => response.json());
 const entry = about.flavor_text_entries.find(item => item.language.name === 'en');

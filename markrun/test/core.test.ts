@@ -11,7 +11,7 @@ process.env.MARKRUN_CACHE_DIR = mkdtempSync(join(tmpdir(), "markrun-cache-"));
 import { Markrun, MarkrunError, parse, resolveSection, runFile } from "../src/index.ts";
 import type { MarkrunOptions } from "../src/index.ts";
 
-const fence = (code: string, language = "ts", close = "```") => `\`\`\`${language}\n${code}\n${close}`;
+const fence = (code: string, language = "ts run", close = "```") => `\`\`\`${language}\n${code}\n${close}`;
 const doc = (...parts: string[]) => parts.join("\n");
 const marker = (name: string) => `<!--$: ${name} -->`;
 function capture(source: string, options: MarkrunOptions = {}) {
@@ -328,7 +328,7 @@ test("markers inside executable fences are not Markdown structure", async () => 
 });
 
 test("a longer closing fence is accepted, including a four-backtick closer", async () => {
-  const { runtime, output } = capture(fence('console.log(1)', 'ts', '````'));
+  const { runtime, output } = capture(fence('console.log(1)', 'ts run', '````'));
   await runtime.run();
   assert.deepEqual(output, [[1]]);
 });
@@ -345,18 +345,25 @@ test("unclosed fences report their opening line", () => {
 });
 
 test("BOM and CRLF input are normalized", async () => {
-  const { runtime, output } = capture('﻿```ts\r\nconsole.log(1)\r\n```\r\n<!--$: A -->\r\ntext');
+  const { runtime, output } = capture('﻿```ts run\r\nconsole.log(1)\r\n```\r\n<!--$: A -->\r\ntext');
   await runtime.run();
   assert.deepEqual(output, [[1]]);
   assert.equal(await runtime.pull('A'), 'text');
 });
 
-test("unlabelled and js fences execute; text, unknown languages and tilde fences print", async () => {
-  const { runtime, output } = capture(doc(fence('console.log(1)', ''), fence('console.log(2)', 'js'), fence('throw 1', 'text'), fence('throw 2', 'python'), '~~~ts\nthrow 3\n~~~', fence('throw 4', 'ts noexec')));
+test("only fences marked run execute; everything else is shown", async () => {
+  const shown = [fence('throw 1', 'ts'), fence('throw 2', ''), fence('throw 3', 'text'), fence('throw 4', 'python'), '~~~ts run\nthrow 5\n~~~', fence('throw 6', 'ts run now'), fence('throw 7', 'sh run')];
+  const { runtime, output } = capture(doc(fence('console.log(1)', 'ts run'), fence('console.log(2)', 'js run'), fence('console.log(3)', 'run'), fence('console.log(4)', 'TypeScript Run'), ...shown));
   await runtime.run();
-  assert.deepEqual(output.slice(0, 2), [[1], [2]]);
-  const printed = String(output[2][0]);
-  for (const label of ['```text', '```python', '~~~ts', '```ts noexec']) assert.ok(printed.includes(label), label);
+  assert.deepEqual(output.slice(0, 4), [[1], [2], [3], [4]]);
+  const printed = String(output[4][0]);
+  for (const label of ['```ts\n', '```\nthrow 2', '```text', '```python', '~~~ts run', '```ts run now', '```sh run']) assert.ok(printed.includes(label), label);
+});
+
+test("a #! first line lets the system run the file, and is never printed", async () => {
+  const { runtime, output } = capture(doc('#!/usr/bin/env mr', '---', 'title: Hello', '---', 'text', fence('console.log("ran")')));
+  await runtime.run();
+  assert.deepEqual(output, [['text'], ['ran']]);
 });
 
 // Checking, imports and files
@@ -423,7 +430,8 @@ test("the example works with and without arguments", async () => {
     assert.equal(text.includes('And it uses hello world'), args.length > 0);
     assert.equal(text.split("In addition to more than one, there's more than 1 execution too").length - 1, 1);
     assert.match(text, /## I mean, this renders nicely!\nBecause it's rendered/);
-    assert.doesNotMatch(text, /```ts/);
+    assert.doesNotMatch(text, /```ts run|#!/);
+    assert.match(text, /```ts\nconsole.log\("I am printed as code, never executed"\);\n```/);
   }
 });
 

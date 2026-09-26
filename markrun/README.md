@@ -2,9 +2,9 @@
 
 **A Markdown file that runs as a command.**
 
-Markrun runs plain Markdown files whose TypeScript/JavaScript blocks are code. This README is one: read it here, or run it with `mr README.md`.
+Markrun runs plain Markdown files whose ```` ```ts run ```` blocks are code. This README is one: read it here, or run it with `mr README.md`.
 
-```ts
+```ts run
 // Everything before the first section marker is the entry: it runs when the file runs.
 const [chapter] = Bun.argv.slice(2);
 if (chapter) {
@@ -56,7 +56,8 @@ bun run check                 # type-check Markrun itself
 This is `example.md`:
 
 ````markdown
-```ts
+#!/usr/bin/env mr
+```ts run
 const args = Bun.argv.slice(2);
 
 if (args.length > 0) {
@@ -73,15 +74,21 @@ console.log(last);
 That's referenced inside the script
 And it uses {{ arguments }}
 
-```ts
+```ts run
 console.log("Only if arguments were passed");
 ```
 
 <!--$: Always -->
 We can have multiple md blocks like this
 
-```ts
+```ts run
 console.log("In addition to more than one, there's more than 1 execution too");
+```
+
+This block has no `run`, so it's only shown:
+
+```ts
+console.log("I am printed as code, never executed");
 ```
 
 <!--$: Last Section -->
@@ -90,6 +97,8 @@ Because it's rendered with console.log in the first section
 ````
 
 `mr example.md hello world` prints `Run` because arguments were passed, then `Always` and `Last Section`. `Always` is an ordinary section name, not a reserved hook.
+
+The first line, `#!/usr/bin/env mr`, lets the system run the file directly: after `chmod +x example.md`, `./example.md hello world` does the same as `mr example.md hello world`. Markrun never prints that line.
 
 `kitchen-sink.md` is a small Pokédex using every feature: flags, names from arguments or stdin, `--help` and `--version` routes, a section that awaits a `fetch`, sections rendering sections, JSON output, and stderr with exit codes. It needs internet access to reach [PokeAPI](https://pokeapi.co).
 
@@ -106,15 +115,15 @@ A Markrun file is plain Markdown. These are the only things that mean something 
 
 | Construct | Meaning |
 | --- | --- |
-| Backtick fence with `ts`, `typescript`, `js`, `javascript`, or no label | Executable code. |
+| A backtick fence labeled `ts run`, `typescript run`, `js run`, `javascript run`, or just `run` | Executable code. Every other fence is only shown. |
 | Everything before the first marker | The entry. `mr file.md` runs it. |
 | `<!--$: Name -->` on its own line, outside a fence | Starts a section named `Name`. It runs until the next marker. |
 | `$: md = 'Name'` / `$: md = 'Name', { values }` | Render the section now and declare `const md`, a string with its output. |
 | `{{ key }}` | Filled from the values passed at the pull. A missing value is an error. |
-| Any other full-line `<!-- … -->` comment, and frontmatter | Notes. Never executed, never printed. |
+| Any other full-line `<!-- … -->` comment, frontmatter, and a `#!` first line | Notes. Never executed, never printed. |
 | `import { route } from 'markrun'` | `await route('Help', ['-h', '--help'])` prints a section and exits when a flag is passed. |
 
-Markers are HTML comments, so GitHub and other Markdown viewers hide them. Tilde fences (`~~~ts`) and other languages are shown, never run; this README uses them for examples.
+Markers are HTML comments, so GitHub and other Markdown viewers hide them. Running code is opt-in: a plain ```` ```ts ```` block is an example that is shown, never run, so any Markdown file is safe to open with `mr`. GitHub highlights ```` ```ts run ```` by its first word and never shows the `run`.
 
 <!--$: rendering -->
 ## Rendering
@@ -125,7 +134,7 @@ Rendering a section goes top to bottom: its text, then whatever its code prints,
 <!--$: List -->
 # {{ title }}
 
-```ts
+```ts run
 for (const item of items) {
   $: line = 'Line', { item };
   console.log(line);          // lands right here, under the heading
@@ -142,10 +151,10 @@ Done
 
 A section is a template, and its values come only from the pull that renders it:
 
-~~~ts
+```ts
 $: md = 'Greeting', { name: 'Ada' };   // {{ name }} is "Ada"
 $: line = 'Line', item;                // item's keys become the section's names
-~~~
+```
 
 Inside a section, passed values are `const` variables in its code and fill its placeholders. Nothing else does: a section's own variables never reach its text, and the entry gets no values at all. To trace a `{{ name }}`, find the pull.
 
@@ -157,7 +166,7 @@ Inside a section, passed values are `const` variables in its code and fill its p
 
 A live example. On GitHub you see its code and the `Greeting` template below it; with `mr README.md values` you see the result:
 
-```ts
+```ts run
 $: greeting = 'Greeting', { name: 'Ada', language: 'Markrun' };
 console.log(greeting);
 ```
@@ -165,7 +174,7 @@ console.log(greeting);
 <!--$: Greeting -->
 > Hello {{ name }}, this line was filled in by {{ language }}.
 
-```ts
+```ts run
 // Passed values are also variables in the section's own code.
 console.log(`> (${name.length} letters in "${name}")`);
 ```
@@ -182,7 +191,7 @@ Every region can `await`, including sections. A pull waits for the section, so t
 
 Use Bun's APIs directly. `mr` makes `Bun.argv` look like a normal run, so `Bun.argv.slice(2)` holds the user's arguments.
 
-~~~ts
+```ts
 import { parseArgs } from 'util';
 import { route } from 'markrun';
 
@@ -197,7 +206,7 @@ const { values: flags, positionals } = parseArgs({
 const text = process.stdin.isTTY ? undefined : await Bun.stdin.text();
 const data = await Bun.stdin.json();            // one JSON value
 const rows = Bun.JSONL.parse(await Bun.stdin.text());
-~~~
+```
 
 - `process.stdin.isTTY` is true when nothing is piped. Without the check, reading stdin in a terminal waits for Ctrl-D, like `cat`.
 - `Bun.JSONL.parse` stops at the first invalid line and returns what it parsed so far.
@@ -211,7 +220,7 @@ Hooks read JSON on stdin and answer with exit codes, stdout and stderr, so a Mar
 
 ~~~ts
 <!-- PreToolUse hook: stop recursive deletes, and tell Claude why. -->
-```ts
+```ts run
 const input = await Bun.stdin.json();
 const command = input.tool_input?.command ?? '';
 
@@ -230,6 +239,7 @@ Blocked `{{ command }}`. Ask the user to run it, or delete specific files instea
 - For hooks that answer in JSON, keep the entry free of text and put notes in comments: stdout must be only the JSON object.
 - For SessionStart and UserPromptSubmit hooks, plain stdout becomes context for Claude, so the file's own text is the context.
 - Point the hook at the full path of `mr`, for example `"$HOME/.local/bin/mr" "$CLAUDE_PROJECT_DIR/.claude/hooks/guard.md"`. Hooks may not see your shell's `PATH`.
+- With a `#!/usr/bin/env mr` first line and `chmod +x`, the file itself can be the command. That relies on `mr` being on the hook's `PATH`.
 
 <!--$: structure -->
 ## Structure
@@ -257,7 +267,7 @@ The compiled `mr` is built with Bun's `--bytecode`, so it starts in about 15 ms.
 <!--$: embedding -->
 ## Embedding
 
-~~~ts
+```ts
 import { Markrun, runFile } from './src/index.ts';
 
 const runtime = new Markrun(source, { filename: '/absolute/path/to/document.md', args: ['hello'] });
@@ -267,7 +277,7 @@ await runtime.run();                                     // run the entry, print
 const text = await runtime.pull('Run', { arguments: 'hello' });
 
 await runFile('./example.md');                           // or read a file and run its entry
-~~~
+```
 
 `runFile()` does not rewrite the host process's argument vector; the CLI makes `process.argv` and `Bun.argv` match a direct run. `route()` calls the `exit` option, which defaults to `process.exit`. Runtime failures name the section and the starting line of the running block, with the original exception kept as `cause`.
 
